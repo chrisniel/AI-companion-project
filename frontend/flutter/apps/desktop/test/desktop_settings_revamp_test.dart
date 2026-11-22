@@ -45,8 +45,8 @@ void main() {
       );
 
       final voice = kSettingsSections.firstWhere((s) => s.id == SettingsSectionId.voice);
-      expect(voice.status, equals(SettingsSectionStatus.planned));
-      expect(voice.milestoneHint, equals('M4'));
+      expect(voice.status, equals(SettingsSectionStatus.available));
+      expect(voice.milestoneHint, isNull);
 
       final tools = kSettingsSections.firstWhere((s) => s.id == SettingsSectionId.tools);
       expect(tools.status, equals(SettingsSectionStatus.available));
@@ -289,11 +289,12 @@ void main() {
       expect(find.text('Appearance & Theme'), findsOneWidget);
       expect(find.byKey(const Key('settings_search_input')), findsOneWidget);
 
-      // Tap Voice & Audio (Planned M4)
+      // Tap Voice & Audio (Available M4 Batch C; standalone fallback without controller)
       await tester.tap(find.byKey(const Key('settings_nav_voice')));
       await tester.pumpAndSettle();
       expect(controller.selectedSettingsSection, equals(SettingsSectionId.voice));
-      expect(find.textContaining('Milestone M4 Voice'), findsOneWidget);
+      expect(find.text('Voice & Audio'), findsWidgets);
+      expect(find.textContaining('Connect to the Local AI Runtime'), findsOneWidget);
 
       // Tap Tools & Safety (Available M4 Batch A; standalone fallback without controller)
       await tester.tap(find.byKey(const Key('settings_nav_tools')));

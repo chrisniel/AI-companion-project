@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'desktop_audio_adapter.dart';
+
 /// Manages non-secret persistent desktop client settings on Windows.
 ///
 /// Plaintext preferences (such as the runtime host URL) are persisted in
@@ -261,23 +263,75 @@ class DesktopClientSettings {
 
   /// Persists whether the user explicitly signed out / locked profile access.
   Future<void> writeProfileExplicitlyLocked(bool locked) async {
-    final file = File(_filePath);
-    await file.parent.create(recursive: true);
+    await _updateJson((data) {
+      data['profileExplicitlyLocked'] = locked;
+    });
+  }
 
-    Map<String, dynamic> data = {};
+  /// Reads device-local Windows audio device IDs and mute preference.
+  Future<VoiceHardwarePrefs> readVoiceHardwarePrefs() async {
+    final data = await _readJsonMap();
+    final raw = data['voiceHardwarePrefs'];
+    if (raw is Map<String, dynamic>) {
+      return VoiceHardwarePrefs.fromJson(raw);
+    }
+    if (raw is Map) {
+      return VoiceHardwarePrefs.fromJson(Map<String, dynamic>.from(raw));
+    }
+    return const VoiceHardwarePrefs();
+  }
+
+  /// Persists device-local Windows audio device IDs and mute preference.
+  Future<void> writeVoiceHardwarePrefs(VoiceHardwarePrefs prefs) async {
+    await _updateJson((data) {
+      data['voiceHardwarePrefs'] = prefs.toJson();
+    });
+  }
+
+  /// Reads customizable Desktop voice keyboard shortcuts.
+  Future<VoiceShortcutConfig> readVoiceShortcuts() async {
+    final data = await _readJsonMap();
+    final raw = data['voiceShortcuts'];
+    if (raw is Map<String, dynamic>) {
+      return VoiceShortcutConfig.fromJson(raw);
+    }
+    if (raw is Map) {
+      return VoiceShortcutConfig.fromJson(Map<String, dynamic>.from(raw));
+    }
+    return VoiceShortcutConfig.defaults();
+  }
+
+  /// Persists customizable Desktop voice keyboard shortcuts.
+  Future<void> writeVoiceShortcuts(VoiceShortcutConfig shortcuts) async {
+    await _updateJson((data) {
+      data['voiceShortcuts'] = shortcuts.toJson();
+    });
+  }
+
+  Future<Map<String, dynamic>> _readJsonMap() async {
     try {
-      if (await file.exists()) {
-        final content = await file.readAsString();
-        final dynamic decoded = jsonDecode(content);
-        if (decoded is Map<String, dynamic>) {
-          data = Map<String, dynamic>.from(decoded);
-        }
+      final file = File(_filePath);
+      if (!await file.exists()) {
+        return <String, dynamic>{};
+      }
+      final content = await file.readAsString();
+      final dynamic decoded = jsonDecode(content);
+      if (decoded is Map<String, dynamic>) {
+        return Map<String, dynamic>.from(decoded);
+      }
+      if (decoded is Map) {
+        return Map<String, dynamic>.from(decoded);
       }
     } catch (_) {}
+    return <String, dynamic>{};
+  }
 
-    data['profileExplicitlyLocked'] = locked;
+  Future<void> _updateJson(void Function(Map<String, dynamic>) mutate) async {
+    final file = File(_filePath);
+    await file.parent.create(recursive: true);
+    final data = await _readJsonMap();
+    mutate(data);
     data['updatedAt'] = DateTime.now().toUtc().toIso8601String();
-
     await file.writeAsString(jsonEncode(data), flush: true);
   }
 

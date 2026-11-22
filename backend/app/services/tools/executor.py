@@ -102,7 +102,8 @@ async def _dispatch_narrow_adapter(
     if tool_name == "search_memories":
         return await prod_adapters.run_search_memories(db, profile_session, validated_args)
     if tool_name == "create_task":
-        return await prod_adapters.run_create_task(db, pid, validated_args)
+        tz_name = (getattr(profile, "quiet_hours_timezone", None) or "UTC") if profile is not None else "UTC"
+        return await prod_adapters.run_create_task(db, pid, validated_args, tz_name=tz_name)
     if tool_name == "update_task":
         return await prod_adapters.run_update_task(db, pid, validated_args)
     if tool_name == "delete_task":

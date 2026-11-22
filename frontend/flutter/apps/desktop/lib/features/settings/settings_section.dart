@@ -97,13 +97,10 @@ const List<SettingsSectionMeta> kSettingsSections = <SettingsSectionMeta>[
   SettingsSectionMeta(
     id: SettingsSectionId.voice,
     label: 'Voice & Audio',
-    description: 'STT/TTS, mic & barge-in config',
+    description: 'STT/TTS, mic, shortcuts & barge-in',
     icon: Icons.mic_none_rounded,
-    status: SettingsSectionStatus.planned,
-    milestoneHint: 'M4',
-    plannedSummary:
-        'Microphone/speaker device routing, local Whisper STT & TTS voice preferences, and duplex barge-in controls will be enabled with Milestone M4 Voice.',
-    keywords: <String>['voice', 'mic', 'audio', 'stt', 'tts', 'barge-in', 'whisper'],
+    status: SettingsSectionStatus.available,
+    keywords: <String>['voice', 'mic', 'audio', 'stt', 'tts', 'barge-in', 'whisper', 'shortcut'],
   ),
   SettingsSectionMeta(
     id: SettingsSectionId.tools,

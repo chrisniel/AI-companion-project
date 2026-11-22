@@ -595,3 +595,79 @@ async def test_batch_e_hardening_fts_near_pre_slice_filtering_and_clear_expires_
     )
     assert promote_res.status_code == 200
     assert promote_res.json()["expires_at"] is None
+
+
+@pytest.mark.anyio
+async def test_extractor_demotes_transient_advice_queries_from_is_core():
+    """Transient seeking/suggestion or temporary movement candidates must never be saved as permanent is_core=True."""
+    provider = MockLLMProvider()
+    provider.is_loaded = lambda: True
+
+    async def mock_extract(**kwargs):
+        return json.dumps([
+            {
+                "content": "The user is seeking suggestions for a suit based on the theme and date of their wedding.",
+                "category": "preference",
+                "scope": "profile",
+                "is_core": True,
+                "expires_at": None,
+                "confidence": 0.92,
+            },
+            {
+                "content": "The user is going to return home later on.",
+                "category": "fact",
+                "scope": "profile",
+                "is_core": True,
+                "expires_at": None,
+                "confidence": 0.9,
+            },
+            {
+                "content": "User's name is Chris.",
+                "category": "fact",
+                "scope": "profile",
+                "is_core": True,
+                "expires_at": None,
+                "confidence": 0.98,
+            },
+        ])
+
+    provider.generate = mock_extract
+    candidates = await extract_memory_candidates(
+        user_text="I'm looking for suit ideas and going home later on.",
+        provider=provider,
+    )
+    assert len(candidates) == 3
+    suit_cand, home_cand, name_cand = candidates
+    assert suit_cand.is_core is False
+    assert suit_cand.category == "context"
+    assert suit_cand.expires_at is not None
+    assert home_cand.is_core is False
+    assert home_cand.category == "context"
+    assert home_cand.expires_at is not None
+    assert name_cand.is_core is True
+    assert name_cand.expires_at is None
+
+
+@pytest.mark.asyncio
+async def test_extractor_preserves_question_disclosures_and_call_me_nickname():
+    """Slice 6F: Self-disclosures inside polite questions ('can you call me...') bypass the '?' skip gate and extract nicknames reliably."""
+    from app.services.memory.extractor import should_skip_extraction
+
+    assert should_skip_extraction("Thank youu so muchh, can you call me honey? or darling ❤️🥺") is False
+    assert should_skip_extraction("What is the capital of France?") is True
+
+    provider = MockLLMProvider()
+    await provider.load_model("mock-test")
+
+    async def mock_empty(*args, **kwargs):
+        return "[]"
+
+    provider.generate = mock_empty
+    candidates = await extract_memory_candidates(
+        user_text="Yeppppp darling seems prettty good to me. So yeah from now on call me darling HAHAHA Thank you",
+        provider=provider,
+    )
+    assert len(candidates) == 1
+    assert "darling" in candidates[0].content.lower()
+    assert candidates[0].is_core is True
+    assert candidates[0].user_verified is True

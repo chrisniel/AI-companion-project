@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import re
 from typing import Any, Optional
 
 from sqlalchemy import select
@@ -27,8 +28,13 @@ from app.services.scheduler.service import (
 )
 
 
-def _parse_iso_utc(raw: str) -> datetime:
-    dt = datetime.fromisoformat(raw.strip().replace("Z", "+00:00"))
+def _parse_iso_utc(raw: str, tz_name: str = "UTC") -> datetime:
+    cleaned = raw.strip()
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", cleaned):
+        cleaned = f"{cleaned}T09:00:00"
+    dt = datetime.fromisoformat(cleaned.replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=resolve_timezone(tz_name))
     normalized = as_utc(dt)
     if normalized is None:
         raise ValueError("Invalid ISO-8601 timestamp.")
@@ -118,8 +124,13 @@ async def run_search_memories(
     return {"summary": f"Found {len(items)} memory match(es).", "items": items, "target_summary": args["query"][:60]}
 
 
-async def run_create_task(db: AsyncSession, profile_id: str, args: dict[str, Any]) -> dict[str, Any]:
-    due_dt = _parse_iso_utc(args["due_at"]) if args.get("due_at") else None
+async def run_create_task(
+    db: AsyncSession,
+    profile_id: str,
+    args: dict[str, Any],
+    tz_name: str = "UTC",
+) -> dict[str, Any]:
+    due_dt = _parse_iso_utc(args["due_at"], tz_name=tz_name) if args.get("due_at") else None
     task = Task(
         id=generate_uuid(),
         profile_id=profile_id,
@@ -180,9 +191,9 @@ async def run_create_reminder(
     profile: Optional[Profile],
     args: dict[str, Any],
 ) -> dict[str, Any]:
-    scheduled_at = _parse_iso_utc(args["scheduled_at"])
     tz_name = getattr(profile, "quiet_hours_timezone", "UTC") or "UTC"
     resolve_timezone(tz_name)
+    scheduled_at = _parse_iso_utc(args["scheduled_at"], tz_name=tz_name)
     rem = Reminder(
         id=generate_uuid(),
         profile_id=profile_id,

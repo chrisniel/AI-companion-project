@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:companion_api/companion_api.dart';
 import 'package:companion_design/companion_design.dart';
 import 'package:flutter/gestures.dart';
@@ -8,6 +10,9 @@ import '../features/chat/assistant_markdown_view.dart';
 import '../features/chat/conversation_history_drawer.dart';
 import '../features/chat/desktop_chat_controller.dart';
 import '../features/tools/desktop_tool_policy_controller.dart';
+import '../features/voice/desktop_voice_controller.dart';
+import '../features/voice/live_voice_stage_panel.dart';
+import '../features/voice/voice_shortcut_recorder.dart';
 import '../platform/desktop_client_settings.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -15,13 +20,21 @@ class ChatScreen extends StatefulWidget {
     super.key,
     this.controller,
     this.toolPolicyController,
+    this.voiceController,
     this.clientSettings,
+    this.isActiveTab = true,
+    this.onRegisterCloseHistoryDrawer,
+    this.onRegisterToggleHistoryDrawer,
     this.onNavigateToSettings,
   });
 
   final DesktopChatController? controller;
   final DesktopToolPolicyController? toolPolicyController;
+  final DesktopVoiceController? voiceController;
   final DesktopClientSettings? clientSettings;
+  final bool isActiveTab;
+  final void Function(bool Function()? closer)? onRegisterCloseHistoryDrawer;
+  final void Function(VoidCallback? toggleDrawer)? onRegisterToggleHistoryDrawer;
   final VoidCallback? onNavigateToSettings;
 
   @override
@@ -30,6 +43,7 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   late final TextEditingController _textController;
+  late final FocusNode _screenFocusNode;
   late final FocusNode _focusNode;
   late final ScrollController _scrollController;
   DesktopChatController? _internalController;
@@ -46,6 +60,8 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _restoredConversationId;
   bool _isRestorationScheduled = false;
   bool _userExplicitlySent = false;
+  bool _wasGenerating = false;
+  bool _pttHolding = false;
   final Set<String> _expandedSourcesMessageIds = <String>{};
   final Set<String> _resolvingConfirmationIds = <String>{};
 
@@ -65,6 +81,108 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  bool _closeHistoryDrawerIfOpen() {
+    if (!_isHistoryOpen) return false;
+    setState(() {
+      _isHistoryOpen = false;
+    });
+    return true;
+  }
+
+  bool _isEditableTextFocused() {
+    final ctx = FocusManager.instance.primaryFocus?.context;
+    if (ctx == null) return false;
+    return ctx.widget is EditableText ||
+        ctx.findAncestorWidgetOfExactType<EditableText>() != null;
+  }
+
+  bool _handleChatHardwareKey(KeyEvent event) {
+    if (!mounted ||
+        !widget.isActiveTab ||
+        VoiceShortcutKeyMapper.isCaptureModalOpen) {
+      return false;
+    }
+    final route = ModalRoute.of(context);
+    if (route != null && !route.isCurrent) {
+      return false;
+    }
+
+    final hw = HardwareKeyboard.instance;
+    if (event is KeyDownEvent &&
+        event is! KeyRepeatEvent &&
+        hw.isControlPressed &&
+        !hw.isAltPressed &&
+        !hw.isShiftPressed &&
+        !hw.isMetaPressed) {
+      if (event.logicalKey == LogicalKeyboardKey.keyH &&
+          widget.onRegisterToggleHistoryDrawer == null) {
+        _toggleHistoryDrawer();
+        return true;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.equal ||
+          event.logicalKey == LogicalKeyboardKey.add ||
+          event.logicalKey == LogicalKeyboardKey.numpadAdd) {
+        _updateZoom(_zoomLevel + 0.1);
+        return true;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.minus ||
+          event.logicalKey == LogicalKeyboardKey.numpadSubtract) {
+        _updateZoom(_zoomLevel - 0.1);
+        return true;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.digit0 ||
+          event.logicalKey == LogicalKeyboardKey.numpad0) {
+        _updateZoom(1.0);
+        return true;
+      }
+    }
+
+    final voiceCtrl = widget.voiceController;
+    if (voiceCtrl == null) return false;
+
+    if (event is KeyDownEvent &&
+        event is! KeyRepeatEvent &&
+        event.logicalKey == LogicalKeyboardKey.space &&
+        voiceCtrl.isLiveVoiceActive &&
+        !_isEditableTextFocused()) {
+      final hw = HardwareKeyboard.instance;
+      if (!hw.isControlPressed &&
+          !hw.isAltPressed &&
+          !hw.isShiftPressed &&
+          !hw.isMetaPressed) {
+        unawaited(voiceCtrl.interruptBargeIn());
+        return true;
+      }
+    }
+
+    if (VoiceShortcutKeyMapper.matchesKeyEvent(
+      event,
+      voiceCtrl.shortcuts.pushToTalk,
+    )) {
+      if (event is KeyDownEvent && !_pttHolding) {
+        _pttHolding = true;
+        if (!voiceCtrl.isLiveVoiceActive &&
+            !voiceCtrl.isDictating &&
+            !voiceCtrl.isTranscribing) {
+          unawaited(voiceCtrl.startDictation());
+        }
+        return true;
+      } else if (event is KeyUpEvent && _pttHolding) {
+        _pttHolding = false;
+        if (voiceCtrl.isDictating) {
+          unawaited(() async {
+            final text = await voiceCtrl.stopDictationAndTranscribe();
+            _insertDictatedText(text);
+          }());
+        } else if (voiceCtrl.isLiveVoiceActive) {
+          unawaited(voiceCtrl.commitLiveUtterance());
+        }
+        return true;
+      }
+    }
+    return false;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -78,6 +196,7 @@ class _ChatScreenState extends State<ChatScreen> {
       );
     }
     _textController = TextEditingController();
+    _screenFocusNode = FocusNode(debugLabel: 'chat_screen_focus');
     _focusNode = FocusNode(onKeyEvent: _handleFocusKeyEvent);
     _scrollController = ScrollController();
 
@@ -85,6 +204,10 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollController.addListener(_onScroll);
     _effectiveController.addListener(_onChatControllerChanged);
     _profileEpoch = _effectiveController.profileEpoch;
+    _wasGenerating = _effectiveController.isGenerating;
+    widget.onRegisterCloseHistoryDrawer?.call(_closeHistoryDrawerIfOpen);
+    widget.onRegisterToggleHistoryDrawer?.call(_toggleHistoryDrawer);
+    HardwareKeyboard.instance.addHandler(_handleChatHardwareKey);
 
     // Initialize current conversation state if already selected
     final activeId = _effectiveController.activeConversation?.id;
@@ -140,36 +263,37 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void didUpdateWidget(ChatScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.isActiveTab && !widget.isActiveTab && _pttHolding) {
+      _pttHolding = false;
+      final vc = widget.voiceController;
+      if (vc != null && vc.isDictating) {
+        unawaited(() async {
+          final text = await vc.stopDictationAndTranscribe();
+          _insertDictatedText(text);
+        }());
+      } else if (vc != null && vc.isLiveVoiceActive) {
+        unawaited(vc.commitLiveUtterance());
+      }
+    }
+    if (oldWidget.onRegisterCloseHistoryDrawer != widget.onRegisterCloseHistoryDrawer) {
+      oldWidget.onRegisterCloseHistoryDrawer?.call(null);
+      widget.onRegisterCloseHistoryDrawer?.call(_closeHistoryDrawerIfOpen);
+    }
+    if (oldWidget.onRegisterToggleHistoryDrawer != widget.onRegisterToggleHistoryDrawer) {
+      oldWidget.onRegisterToggleHistoryDrawer?.call(null);
+      widget.onRegisterToggleHistoryDrawer?.call(_toggleHistoryDrawer);
+    }
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller?.removeListener(_onChatControllerChanged);
       widget.controller?.addListener(_onChatControllerChanged);
       _restoredConversationId = null;
       _isRestorationScheduled = false;
+      _wasGenerating = _effectiveController.isGenerating;
     }
     _checkAndRestoreScroll();
   }
 
   KeyEventResult _handleFocusKeyEvent(FocusNode node, KeyEvent event) {
-    final isControl = HardwareKeyboard.instance.isControlPressed;
-    if (isControl && event is KeyDownEvent) {
-      if (event.logicalKey == LogicalKeyboardKey.equal ||
-          event.logicalKey == LogicalKeyboardKey.add ||
-          event.logicalKey == LogicalKeyboardKey.numpadAdd) {
-        _updateZoom(_zoomLevel + 0.1);
-        return KeyEventResult.handled;
-      }
-      if (event.logicalKey == LogicalKeyboardKey.minus ||
-          event.logicalKey == LogicalKeyboardKey.numpadSubtract) {
-        _updateZoom(_zoomLevel - 0.1);
-        return KeyEventResult.handled;
-      }
-      if (event.logicalKey == LogicalKeyboardKey.digit0 ||
-          event.logicalKey == LogicalKeyboardKey.numpad0) {
-        _updateZoom(1.0);
-        return KeyEventResult.handled;
-      }
-    }
-
     if (event.logicalKey == LogicalKeyboardKey.enter) {
       if (event is KeyDownEvent) {
         final isShift = HardwareKeyboard.instance.isShiftPressed;
@@ -285,6 +409,49 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     _checkAndRestoreScroll();
+
+    final isGeneratingNow = _effectiveController.isGenerating;
+    final completedCleanly = _wasGenerating &&
+        !isGeneratingNow &&
+        _effectiveController.errorMessage == null;
+    _wasGenerating = isGeneratingNow;
+
+    if (completedCleanly && widget.voiceController != null) {
+      MessageOut? latestAssistant;
+      for (final msg in _effectiveController.messages.reversed) {
+        if (msg.sender == 'assistant') {
+          latestAssistant = msg;
+          break;
+        }
+      }
+      unawaited(
+        widget.voiceController!.handleChatCompletionForAutoRead(latestAssistant),
+      );
+    }
+  }
+
+  void _insertDictatedText(String? transcribed) {
+    final clean = transcribed?.trim();
+    if (!mounted || clean == null || clean.isEmpty) return;
+    final existing = _textController.text;
+    final nextText = existing.trim().isEmpty
+        ? clean
+        : existing.endsWith(' ') || existing.endsWith('\n')
+            ? '$existing$clean'
+            : '$existing $clean';
+    _textController.value = TextEditingValue(
+      text: nextText,
+      selection: TextSelection.collapsed(offset: nextText.length),
+    );
+  }
+
+  Future<void> _toggleDictation(DesktopVoiceController voiceCtrl) async {
+    if (voiceCtrl.isDictating) {
+      final text = await voiceCtrl.stopDictationAndTranscribe();
+      _insertDictatedText(text);
+    } else if (!voiceCtrl.isTranscribing) {
+      await voiceCtrl.startDictation();
+    }
   }
 
   void _checkAndRestoreScroll() {
@@ -325,10 +492,14 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    widget.onRegisterCloseHistoryDrawer?.call(null);
+    widget.onRegisterToggleHistoryDrawer?.call(null);
+    HardwareKeyboard.instance.removeHandler(_handleChatHardwareKey);
     _textController.removeListener(_onTextChanged);
     _scrollController.removeListener(_onScroll);
     _effectiveController.removeListener(_onChatControllerChanged);
     _textController.dispose();
+    _screenFocusNode.dispose();
     _focusNode.dispose();
     _scrollController.dispose();
     _internalController?.dispose();
@@ -418,19 +589,20 @@ class _ChatScreenState extends State<ChatScreen> {
 
         return CallbackShortcuts(
           bindings: <ShortcutActivator, VoidCallback>{
-            const SingleActivator(LogicalKeyboardKey.keyH, control: true): _toggleHistoryDrawer,
-            const SingleActivator(LogicalKeyboardKey.escape): _closeHistoryDrawer,
-            const SingleActivator(LogicalKeyboardKey.equal, control: true): () => _updateZoom(_zoomLevel + 0.1),
-            const SingleActivator(LogicalKeyboardKey.add, control: true): () => _updateZoom(_zoomLevel + 0.1),
-            const SingleActivator(LogicalKeyboardKey.numpadAdd, control: true): () => _updateZoom(_zoomLevel + 0.1),
-            const SingleActivator(LogicalKeyboardKey.minus, control: true): () => _updateZoom(_zoomLevel - 0.1),
-            const SingleActivator(LogicalKeyboardKey.numpadSubtract, control: true): () => _updateZoom(_zoomLevel - 0.1),
-            const SingleActivator(LogicalKeyboardKey.digit0, control: true): () => _updateZoom(1.0),
-            const SingleActivator(LogicalKeyboardKey.numpad0, control: true): () => _updateZoom(1.0),
+            if (_isHistoryOpen)
+              const SingleActivator(LogicalKeyboardKey.escape): _closeHistoryDrawer,
           },
           child: Focus(
+            focusNode: _screenFocusNode,
             autofocus: true,
-            child: Stack(
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: () {
+                if (_focusNode.hasFocus) {
+                  _screenFocusNode.requestFocus();
+                }
+              },
+              child: Stack(
               children: [
                 Padding(
                   padding: const EdgeInsets.all(CompanionSpacing.xl),
@@ -439,6 +611,22 @@ class _ChatScreenState extends State<ChatScreen> {
                     children: [
                       // Header Bar
                       _buildHeader(context, chatCtrl, ext, isDark),
+                      if (widget.voiceController != null)
+                        ListenableBuilder(
+                          listenable: widget.voiceController!,
+                          builder: (context, _) {
+                            final vc = widget.voiceController!;
+                            if (!vc.isLiveVoiceActive) {
+                              return const SizedBox.shrink();
+                            }
+                            return LiveVoiceStagePanel(
+                              controller: vc,
+                              companionName: chatCtrl.getConversationCharacterName(
+                                chatCtrl.activeConversation,
+                              ),
+                            );
+                          },
+                        ),
                       const SizedBox(height: CompanionSpacing.lg),
 
                       // Central Conversational Stage
@@ -452,6 +640,20 @@ class _ChatScreenState extends State<ChatScreen> {
                         const SizedBox(height: CompanionSpacing.sm),
                         _buildErrorBanner(context, chatCtrl.errorMessage!, ext),
                       ],
+                      if (widget.voiceController != null)
+                        ListenableBuilder(
+                          listenable: widget.voiceController!,
+                          builder: (context, _) {
+                            final vc = widget.voiceController!;
+                            if (vc.isLiveVoiceActive || vc.errorMessage == null) {
+                              return const SizedBox.shrink();
+                            }
+                            return Padding(
+                              padding: const EdgeInsets.only(top: CompanionSpacing.sm),
+                              child: _buildVoiceErrorBanner(context, vc, ext),
+                            );
+                          },
+                        ),
 
                       const SizedBox(height: CompanionSpacing.lg),
 
@@ -480,7 +682,8 @@ class _ChatScreenState extends State<ChatScreen> {
               ],
             ),
           ),
-        );
+        ),
+      );
       },
     );
   }
@@ -918,6 +1121,96 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               ),
             ),
+          ),
+          const SizedBox(width: CompanionSpacing.sm),
+        ],
+        if (widget.voiceController != null) ...[
+          ListenableBuilder(
+            listenable: widget.voiceController!,
+            builder: (context, _) {
+              final vc = widget.voiceController!;
+              final isLive = vc.isLiveVoiceActive;
+              final autoRead = vc.voiceSettings?.autoReadReplies ?? false;
+              final showVoiceLabels = constraints.maxWidth >= 1060;
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  NeumorphicButton(
+                    key: const Key('chat_voice_mode_toggle'),
+                    size: NeumorphicButtonSize.sm,
+                    selected: isLive,
+                    accentOnSelected: false,
+                    icon: Icon(
+                      isLive
+                          ? Icons.call_end_rounded
+                          : Icons.record_voice_over_rounded,
+                      size: 16,
+                      color: isLive
+                          ? (ext?.danger ?? CompanionColors.danger)
+                          : null,
+                    ),
+                    tooltip: isLive
+                        ? 'End Live Voice (${vc.shortcuts.inAppToggle.label})'
+                        : 'Start Live Voice (${vc.shortcuts.inAppToggle.label})',
+                    onPressed: isLive ? vc.stopLiveVoice : vc.startLiveVoice,
+                    child: showVoiceLabels
+                        ? Text(
+                            isLive ? 'End Voice' : 'Live Voice',
+                            style: TextStyle(
+                              color: isLive
+                                  ? (ext?.danger ?? CompanionColors.danger)
+                                  : null,
+                            ),
+                          )
+                        : null,
+                  ),
+                  const SizedBox(width: CompanionSpacing.xs),
+                  NeumorphicButton(
+                    key: const Key('chat_auto_read_toggle'),
+                    size: NeumorphicButtonSize.sm,
+                    selected: autoRead,
+                    icon: Icon(
+                      autoRead
+                          ? Icons.volume_up_rounded
+                          : Icons.volume_off_rounded,
+                      size: 16,
+                      color: autoRead ? ext?.accent : null,
+                    ),
+                    tooltip: autoRead
+                        ? 'Auto-Read replies enabled (click to disable)'
+                        : 'Enable Auto-Read replies',
+                    onPressed: vc.voiceSettings == null || vc.isSaving
+                        ? null
+                        : () => vc.updateBackendSettings(
+                              VoiceSettingsUpdate(autoReadReplies: !autoRead),
+                            ),
+                    child: showVoiceLabels ? const Text('Auto-Read') : null,
+                  ),
+                  const SizedBox(width: CompanionSpacing.xs),
+                  NeumorphicButton(
+                    key: const Key('chat_header_mute_toggle'),
+                    size: NeumorphicButtonSize.sm,
+                    selected: vc.isAudioMuted,
+                    icon: Icon(
+                      vc.isAudioMuted
+                          ? Icons.mic_off_rounded
+                          : Icons.mic_none_rounded,
+                      size: 16,
+                      color: vc.isAudioMuted
+                          ? (ext?.warning ?? CompanionColors.warning)
+                          : null,
+                    ),
+                    tooltip: vc.isAudioMuted
+                        ? 'Unmute mic & audio (${vc.shortcuts.muteToggle.label})'
+                        : 'Mute mic & audio (${vc.shortcuts.muteToggle.label})',
+                    onPressed: () => vc.setMuted(!vc.isAudioMuted),
+                    child: (showVoiceLabels && vc.isAudioMuted)
+                        ? const Text('Muted')
+                        : null,
+                  ),
+                ],
+              );
+            },
           ),
           const SizedBox(width: CompanionSpacing.sm),
         ],
@@ -1467,10 +1760,8 @@ class _ChatScreenState extends State<ChatScreen> {
                   const SizedBox(height: CompanionSpacing.xs),
                   _buildToolProgressChip(_effectiveController.activeToolStatus!, ext),
                 ],
-                if (msg.toolReceipts.isNotEmpty) ...[
-                  const SizedBox(height: CompanionSpacing.sm),
-                  _buildToolReceiptsStrip(msg.toolReceipts, ext),
-                ],
+                if (msg.toolReceipts.isNotEmpty)
+                  _buildToolReceiptsStrip(msg, ext, isDark),
                 if (msg.sources.isNotEmpty) ...[
                   const SizedBox(height: CompanionSpacing.sm),
                   _buildSourcesStrip(msg, ext),
@@ -1596,6 +1887,54 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                     ),
                   ),
+                if (widget.voiceController != null &&
+                    !isStreaming &&
+                    (msg.status == 'completed' || msg.status == 'length') &&
+                    msg.content.trim().isNotEmpty) ...[
+                  const SizedBox(height: CompanionSpacing.xs),
+                  ListenableBuilder(
+                    listenable: widget.voiceController!,
+                    builder: (context, _) {
+                      final vc = widget.voiceController!;
+                      final isSpeakingThis = vc.speakingMessageId == msg.id;
+                      return Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          TextButton.icon(
+                            key: Key('message_speak_${msg.id}'),
+                            style: TextButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            icon: Icon(
+                              isSpeakingThis
+                                  ? Icons.stop_rounded
+                                  : Icons.volume_up_rounded,
+                              size: 14,
+                            ),
+                            label: Text(
+                              isSpeakingThis ? 'Stop' : 'Read Aloud',
+                              style: CompanionTypography.caption.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            onPressed: isSpeakingThis
+                                ? vc.stopSpeaking
+                                : () => vc.speakMessage(
+                                      messageId: msg.id,
+                                      text: msg.content,
+                                    ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ],
               ],
             ),
     );
@@ -1673,40 +2012,418 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildToolReceiptsStrip(
-    List<ToolReceiptOut> receipts,
+    MessageOut msg,
+    CompanionThemeExtension? ext,
+    bool isDark,
+  ) {
+    final cards = <Widget>[];
+    for (final r in msg.toolReceipts) {
+      final isBlocked = r.outcomeStatus == 'killed' ||
+          r.decision == 'DENY' ||
+          r.outcomeStatus == 'denied' ||
+          r.outcomeStatus == 'rejected_by_user' ||
+          r.outcomeStatus == 'failed';
+      if (isBlocked) {
+        cards.add(_buildBlockedToolCard(r, ext));
+        continue;
+      }
+      if (r.outcomeStatus == 'pending_confirmation') {
+        if (msg.pendingConfirmations.isEmpty) {
+          cards.add(_buildBlockedToolCard(r, ext, isWarning: true));
+        }
+        continue;
+      }
+      if (r.toolName == 'weather_lookup') {
+        cards.add(_buildWeatherWidgetCard(r, ext, isDark));
+        continue;
+      }
+      if (r.toolName == 'web_search' || r.toolName == 'web_fetch') {
+        // Executed web tools surface cleanly via the collapsible Sources strip below.
+        continue;
+      }
+      cards.add(_buildAssistantActionCard(r, ext, isDark));
+    }
+    if (cards.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: CompanionSpacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < cards.length; i++) ...[
+            if (i > 0) const SizedBox(height: CompanionSpacing.xs),
+            cards[i],
+          ],
+        ],
+      ),
+    );
+  }
+
+  ({IconData icon, Color color}) _weatherVisualForCondition(
+    String condition,
     CompanionThemeExtension? ext,
   ) {
-    return Wrap(
-      spacing: CompanionSpacing.xs,
-      runSpacing: CompanionSpacing.xs,
-      children: receipts.map((r) {
-        final isBlocked = r.outcomeStatus == 'killed' ||
-            r.decision == 'DENY' ||
-            r.outcomeStatus == 'denied' ||
-            r.outcomeStatus == 'rejected_by_user';
-        final color = isBlocked
-            ? (ext?.danger ?? CompanionColors.danger)
-            : (ext?.accent ?? CompanionColors.lightAccent);
-        return Tooltip(
-          message: r.summary,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.10),
-              borderRadius: CompanionRadius.borderSm,
-              border: Border.all(color: color.withValues(alpha: 0.25)),
+    final low = condition.toLowerCase();
+    if (low.contains('thunder') || low.contains('storm')) {
+      return (icon: Icons.thunderstorm_rounded, color: Colors.amberAccent);
+    }
+    if (low.contains('drizzle') || low.contains('rain') || low.contains('shower')) {
+      return (icon: Icons.water_drop_rounded, color: Colors.lightBlueAccent);
+    }
+    if (low.contains('partly')) {
+      return (icon: Icons.wb_cloudy_rounded, color: ext?.accent ?? CompanionColors.lightAccent);
+    }
+    if (low.contains('overcast') || low.contains('cloud') || low.contains('fog')) {
+      return (icon: Icons.cloud_rounded, color: ext?.textSecondary ?? Colors.blueGrey);
+    }
+    return (icon: Icons.wb_sunny_rounded, color: Colors.orangeAccent);
+  }
+
+  String _formatShortDateLabel(String isoDate) {
+    final parsed = DateTime.tryParse(isoDate);
+    if (parsed == null) return isoDate;
+    final now = DateTime.now();
+    if (parsed.year == now.year && parsed.month == now.month && parsed.day == now.day) {
+      return 'Today';
+    }
+    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return '${weekdays[parsed.weekday - 1]}, ${months[parsed.month - 1]} ${parsed.day}';
+  }
+
+  Widget _buildWeatherWidgetCard(
+    ToolReceiptOut receipt,
+    CompanionThemeExtension? ext,
+    bool isDark,
+  ) {
+    final summary = receipt.summary;
+    final headerMatch = RegExp(
+      r'^Weather in ([^:]+):\s*([^,]+),\s*([-\d.]+)\s*°?C(?:\s*now)?\.',
+    ).firstMatch(summary);
+    final location = headerMatch?.group(1)?.trim();
+    final nowCondition = headerMatch?.group(2)?.trim() ?? '';
+    final nowTemp = headerMatch?.group(3)?.trim();
+
+    final dayMatches = RegExp(
+      r'(\d{4}-\d{2}-\d{2}):\s*([^(]+?)\s*\(([-\d.]+)\s*[–\-]\s*([-\d.]+)\s*°?C,\s*rain\s*(\d+)%\)',
+    ).allMatches(summary).toList();
+
+    final surfaceColor = isDark
+        ? Colors.white.withValues(alpha: 0.045)
+        : Colors.black.withValues(alpha: 0.03);
+    final borderColor = ext?.borderSubtle ?? (isDark ? Colors.white12 : Colors.black12);
+    final visual = _weatherVisualForCondition(nowCondition, ext);
+
+    return Container(
+      key: const Key('weather_widget_card'),
+      padding: const EdgeInsets.all(CompanionSpacing.md),
+      decoration: BoxDecoration(
+        color: surfaceColor,
+        borderRadius: CompanionRadius.borderMd,
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (location != null && nowTemp != null) ...[
+            Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: visual.color.withValues(alpha: 0.16),
+                    borderRadius: CompanionRadius.borderSm,
+                  ),
+                  child: Icon(visual.icon, size: 18, color: visual.color),
+                ),
+                const SizedBox(width: CompanionSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        location,
+                        style: CompanionTypography.bodySmall.copyWith(
+                          color: ext?.textPrimary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        nowCondition,
+                        style: CompanionTypography.caption.copyWith(
+                          color: ext?.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: (ext?.accent ?? CompanionColors.lightAccent).withValues(alpha: 0.14),
+                    borderRadius: CompanionRadius.borderFull,
+                  ),
+                  child: Text(
+                    '$nowTemp°C',
+                    style: CompanionTypography.bodySmall.copyWith(
+                      color: ext?.textPrimary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            child: Text(
-              '${r.toolName} · ${r.outcomeStatus}',
-              style: CompanionTypography.caption.copyWith(
-                color: color,
-                fontWeight: FontWeight.w600,
+            if (dayMatches.isNotEmpty) ...[
+              const SizedBox(height: CompanionSpacing.sm),
+              _WeatherForecastScrollStrip(
+                key: const Key('weather_forecast_scroll_strip'),
+                children: [
+                  for (var i = 0; i < dayMatches.length; i++) ...[
+                    if (i > 0) const SizedBox(width: CompanionSpacing.xs),
+                    _buildWeatherDayTile(dayMatches[i], ext, isDark),
+                  ],
+                ],
+              ),
+            ],
+          ] else
+            Text(
+              summary,
+              style: CompanionTypography.bodySmall.copyWith(
+                color: ext?.textSecondary,
               ),
             ),
-          ),
-        );
-      }).toList(),
+        ],
+      ),
     );
+  }
+
+  Widget _buildWeatherDayTile(
+    RegExpMatch match,
+    CompanionThemeExtension? ext,
+    bool isDark,
+  ) {
+    final dateIso = match.group(1) ?? '';
+    final cond = (match.group(2) ?? '').trim();
+    final minT = match.group(3) ?? '';
+    final maxT = match.group(4) ?? '';
+    final rainPct = match.group(5) ?? '0';
+    final label = _formatShortDateLabel(dateIso);
+    final isToday = label == 'Today';
+    final visual = _weatherVisualForCondition(cond, ext);
+    final accent = ext?.accent ?? CompanionColors.lightAccent;
+
+    return Container(
+      width: 114,
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: isToday
+            ? accent.withValues(alpha: 0.10)
+            : (isDark ? Colors.white.withValues(alpha: 0.03) : Colors.black.withValues(alpha: 0.02)),
+        borderRadius: CompanionRadius.borderSm,
+        border: Border.all(
+          color: isToday
+              ? accent.withValues(alpha: 0.45)
+              : (ext?.borderSubtle ?? Colors.transparent),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: CompanionTypography.caption.copyWith(
+              color: isToday ? accent : ext?.textPrimary,
+              fontWeight: FontWeight.w700,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Icon(visual.icon, size: 15, color: visual.color),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  '$minT°–$maxT°',
+                  style: CompanionTypography.caption.copyWith(
+                    color: ext?.textPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 3),
+          Text(
+            cond,
+            style: CompanionTypography.caption.copyWith(
+              color: ext?.textSecondary,
+              fontSize: 11,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 2),
+          Row(
+            children: [
+              Icon(
+                Icons.water_drop_outlined,
+                size: 11,
+                color: Colors.lightBlueAccent.withValues(alpha: 0.9),
+              ),
+              const SizedBox(width: 2),
+              Text(
+                '$rainPct%',
+                style: CompanionTypography.caption.copyWith(
+                  color: ext?.textMuted,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAssistantActionCard(
+    ToolReceiptOut receipt,
+    CompanionThemeExtension? ext,
+    bool isDark,
+  ) {
+    final (IconData icon, String title) = switch (receipt.toolName) {
+      'create_reminder' => (Icons.alarm_add_rounded, 'Reminder Set'),
+      'list_reminders' => (Icons.event_note_rounded, 'Reminders Checked'),
+      'delete_reminder' => (Icons.event_busy_rounded, 'Reminder Removed'),
+      'create_task' => (Icons.task_alt_rounded, 'Task Added'),
+      'update_task' => (Icons.check_circle_outline_rounded, 'Task Updated'),
+      'list_tasks' => (Icons.checklist_rounded, 'Tasks Checked'),
+      'delete_task' => (Icons.delete_outline_rounded, 'Task Removed'),
+      'create_alarm' => (Icons.alarm_rounded, 'Alarm Set'),
+      'list_alarms' => (Icons.access_alarms_rounded, 'Alarms Checked'),
+      'delete_alarm' => (Icons.alarm_off_rounded, 'Alarm Removed'),
+      'search_memories' => (Icons.psychology_alt_rounded, 'Memories Checked'),
+      _ => (Icons.auto_awesome_rounded, 'Assistant Action'),
+    };
+    final accent = ext?.accent ?? CompanionColors.lightAccent;
+    return Container(
+      key: Key('assistant_action_card_${receipt.toolName}'),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withValues(alpha: 0.04) : Colors.black.withValues(alpha: 0.025),
+        borderRadius: CompanionRadius.borderMd,
+        border: Border.all(color: accent.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.14),
+              borderRadius: CompanionRadius.borderSm,
+            ),
+            child: Icon(icon, size: 16, color: accent),
+          ),
+          const SizedBox(width: CompanionSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: CompanionTypography.caption.copyWith(
+                    color: ext?.textPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  receipt.summary,
+                  style: CompanionTypography.caption.copyWith(
+                    color: ext?.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBlockedToolCard(
+    ToolReceiptOut receipt,
+    CompanionThemeExtension? ext, {
+    bool isWarning = false,
+  }) {
+    final color = isWarning
+        ? (ext?.warning ?? CompanionColors.warning)
+        : (ext?.danger ?? CompanionColors.danger);
+    final label = switch (receipt.outcomeStatus) {
+      'killed' => 'Actions Paused',
+      'denied' => 'Action Blocked',
+      'rejected_by_user' => 'Action Cancelled',
+      'failed' => 'Action Failed',
+      'pending_confirmation' => 'Awaiting Confirmation',
+      _ => 'Notice',
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: CompanionRadius.borderSm,
+        border: Border.all(color: color.withValues(alpha: 0.30)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            isWarning ? Icons.hourglass_bottom_rounded : Icons.shield_outlined,
+            size: 16,
+            color: color,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: CompanionTypography.caption.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  receipt.summary,
+                  style: CompanionTypography.caption.copyWith(
+                    color: ext?.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _displaySourceUrl(WebSourceRefOut src) {
+    final parsed = Uri.tryParse(src.url);
+    if (parsed == null || parsed.host.isEmpty) return src.domain;
+    final path = parsed.path;
+    if (path.isEmpty || path == '/') return src.domain;
+    return '${src.domain}$path';
   }
 
   Widget _buildSourcesStrip(MessageOut msg, CompanionThemeExtension? ext) {
@@ -1782,7 +2499,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           overflow: TextOverflow.ellipsis,
                         ),
                         Text(
-                          '${src.domain} — ${src.url}',
+                          _displaySourceUrl(src),
                           style: CompanionTypography.caption.copyWith(
                             color: ext?.textMuted,
                           ),
@@ -1907,6 +2624,57 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  Widget _buildVoiceErrorBanner(
+    BuildContext context,
+    DesktopVoiceController vc,
+    CompanionThemeExtension? ext,
+  ) {
+    final bannerColor = vc.isAudioMuted
+        ? (ext?.warning ?? CompanionColors.warning)
+        : (ext?.danger ?? CompanionColors.danger);
+    return Container(
+      key: const Key('chat_voice_error_banner'),
+      padding: const EdgeInsets.symmetric(
+        horizontal: CompanionSpacing.md,
+        vertical: CompanionSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: bannerColor.withValues(alpha: 0.12),
+        borderRadius: CompanionRadius.borderMd,
+        border: Border.all(color: bannerColor.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            vc.isAudioMuted ? Icons.mic_off_rounded : Icons.error_outline_rounded,
+            size: 16,
+            color: bannerColor,
+          ),
+          const SizedBox(width: CompanionSpacing.sm),
+          Expanded(
+            child: Text(
+              vc.errorMessage ?? '',
+              style: CompanionTypography.bodySmall.copyWith(color: ext?.textPrimary),
+            ),
+          ),
+          if (vc.isAudioMuted) ...[
+            const SizedBox(width: CompanionSpacing.sm),
+            TextButton(
+              key: const Key('chat_voice_error_unmute'),
+              onPressed: () => unawaited(vc.setMuted(false)),
+              child: const Text('Unmute'),
+            ),
+          ],
+          IconButton(
+            tooltip: 'Dismiss voice notice',
+            icon: Icon(Icons.close_rounded, size: 16, color: ext?.textSecondary),
+            onPressed: vc.clearError,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildErrorBanner(
     BuildContext context,
     String message,
@@ -2017,12 +2785,49 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               ),
               const SizedBox(width: CompanionSpacing.sm),
-              const NeumorphicButton(
-                size: NeumorphicButtonSize.sm,
-                icon: Icon(Icons.mic_none_rounded),
-                tooltip: 'Voice input (Planned M4)',
-                onPressed: null,
-              ),
+              if (widget.voiceController != null)
+                ListenableBuilder(
+                  listenable: widget.voiceController!,
+                  builder: (context, _) {
+                    final vc = widget.voiceController!;
+                    final dictating = vc.isDictating;
+                    final transcribing = vc.isTranscribing;
+                    return NeumorphicButton(
+                      key: const Key('chat_dictate_button'),
+                      size: NeumorphicButtonSize.sm,
+                      selected: dictating,
+                      accentOnSelected: false,
+                      icon: transcribing
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Icon(
+                              dictating
+                                  ? Icons.stop_circle_rounded
+                                  : Icons.mic_none_rounded,
+                              color: dictating
+                                  ? (ext?.danger ?? CompanionColors.danger)
+                                  : null,
+                            ),
+                      tooltip: dictating
+                          ? 'Stop dictation & transcribe into message'
+                          : transcribing
+                              ? 'Transcribing speech...'
+                              : 'Dictate message (speech to text)',
+                      onPressed: transcribing ? null : () => _toggleDictation(vc),
+                    );
+                  },
+                )
+              else
+                const NeumorphicButton(
+                  key: Key('chat_dictate_button'),
+                  size: NeumorphicButtonSize.sm,
+                  icon: Icon(Icons.mic_none_rounded),
+                  tooltip: 'Dictation unavailable (voice controller disconnected)',
+                  onPressed: null,
+                ),
               const SizedBox(width: CompanionSpacing.sm),
               if (isBusy)
                 NeumorphicButton(
@@ -2069,6 +2874,81 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _WeatherForecastScrollStrip extends StatefulWidget {
+  const _WeatherForecastScrollStrip({
+    super.key,
+    required this.children,
+  });
+
+  final List<Widget> children;
+
+  @override
+  State<_WeatherForecastScrollStrip> createState() =>
+      _WeatherForecastScrollStripState();
+}
+
+class _WeatherForecastScrollStripState
+    extends State<_WeatherForecastScrollStrip> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _handlePointerSignal(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent || !_scrollController.hasClients) {
+      return;
+    }
+    final pos = _scrollController.position;
+    final delta = event.scrollDelta.dx != 0
+        ? event.scrollDelta.dx
+        : event.scrollDelta.dy;
+    if (pos.maxScrollExtent <= 0 || delta == 0) {
+      return;
+    }
+    final target = (pos.pixels + delta).clamp(0.0, pos.maxScrollExtent);
+    if ((target - pos.pixels).abs() <= 0.5) {
+      return;
+    }
+    GestureBinding.instance.pointerSignalResolver.register(event, (_) {
+      if (_scrollController.hasClients) {
+        _scrollController.jumpTo(target);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      onPointerSignal: _handlePointerSignal,
+      child: Scrollbar(
+        controller: _scrollController,
+        thumbVisibility: true,
+        trackVisibility: true,
+        child: ScrollConfiguration(
+          behavior: ScrollConfiguration.of(context).copyWith(
+            dragDevices: const {
+              PointerDeviceKind.touch,
+              PointerDeviceKind.mouse,
+              PointerDeviceKind.trackpad,
+              PointerDeviceKind.stylus,
+            },
+            scrollbars: false,
+          ),
+          child: SingleChildScrollView(
+            controller: _scrollController,
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Row(children: widget.children),
+          ),
+        ),
       ),
     );
   }

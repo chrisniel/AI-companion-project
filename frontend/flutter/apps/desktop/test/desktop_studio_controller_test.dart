@@ -124,6 +124,7 @@ void main() {
             'system_prompt': body['system_prompt'] ?? '',
             'avatar_asset': body['avatar_asset'] ?? 'default_avatar',
             'preset_id': body['preset_id'] ?? 'custom',
+            'voice_id': body['voice_id'],
             'traits': body['traits'] ?? {
               'warmth': 50, 'teasing': 50, 'guardedness': 50, 'directness': 50,
               'expressiveness': 50, 'affection': 50, 'formality': 50, 'verbosity': 50,
@@ -1440,6 +1441,68 @@ void main() {
       expect(studio.draft!.isDirty, isTrue);
       expect(studio.draft!.traits?.warmth, 99);
       expect(studio.error, isNotNull);
+
+      studio.dispose();
+      chat.dispose();
+    });
+
+    test('persists voiceId, supports explicit clearVoiceId reset, and reconciles uncertain voiceId clear timeout', () async {
+      final recordedPatchBodies = <Map<String, dynamic>>[];
+      var failFirstClearPatchWithTimeout = false;
+
+      final client = CompanionClient(
+        sessionStore: InMemoryCredentialStore('psk_test'),
+        httpClient: MockClient((request) async {
+          if (request.url.path.contains('/characters/instances/') && request.method == 'PATCH') {
+            final decoded = jsonDecode(request.body) as Map<String, dynamic>;
+            recordedPatchBodies.add(decoded);
+            if (failFirstClearPatchWithTimeout) {
+              failFirstClearPatchWithTimeout = false;
+              // Simulate timeout after server already applied clear
+              await handleStudioRequest(request);
+              return http.Response('{"detail":"Request timed out"}', 408);
+            }
+          }
+          return handleStudioRequest(request);
+        }),
+      );
+
+      final chat = DesktopChatController(client: client);
+      await chat.checkConnection();
+      final studio = DesktopStudioController(chat: chat);
+      await studio.loadStudioCatalog();
+
+      // 1. Create from template with voice_id
+      studio.selectTemplate(studio.templates.first);
+      studio.draft!.updateVoiceId('af_sarah');
+      expect(studio.draft!.isDirty, isTrue);
+      expect(await studio.saveDraft(), isTrue);
+      expect(studio.instances.first.voiceId, 'af_sarah');
+      expect(studio.draft!.voiceId, 'af_sarah');
+      expect(studio.draft!.isDirty, isFalse);
+
+      // 2. Switch voiceId via PATCH
+      studio.draft!.updateVoiceId('bf_emma');
+      expect(studio.draft!.isDirty, isTrue);
+      expect(await studio.saveDraft(), isTrue);
+      expect(recordedPatchBodies.last['voice_id'], 'bf_emma');
+      expect(studio.instances.first.voiceId, 'bf_emma');
+
+      // 3. Explicit clear back to Profile Default under 408 timeout -> catalog reconciliation confirms null
+      failFirstClearPatchWithTimeout = true;
+      studio.draft!.updateVoiceId(null);
+      expect(studio.draft!.isDirty, isTrue);
+      final savedBeforeCatalogReload = await studio.saveDraft();
+      expect(savedBeforeCatalogReload, isFalse);
+      expect(recordedPatchBodies.last.containsKey('voice_id'), isTrue);
+      expect(recordedPatchBodies.last['voice_id'], isNull);
+
+      // Pump background catalog reload triggered by uncertain write handler
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(studio.uncertainWriteWarning, isFalse);
+      expect(studio.draft!.voiceId, isNull);
+      expect(studio.draft!.isDirty, isFalse);
+      expect(studio.error, isNull);
 
       studio.dispose();
       chat.dispose();

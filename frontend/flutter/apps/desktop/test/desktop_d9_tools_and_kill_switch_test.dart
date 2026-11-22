@@ -11,6 +11,7 @@ import 'package:ai_companion_desktop/lifecycle/desktop_tray_adapter.dart';
 import 'package:ai_companion_desktop/lifecycle/desktop_window_adapter.dart';
 import 'package:ai_companion_desktop/screens/chat_screen.dart';
 import 'package:ai_companion_desktop/shell/desktop_shell.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -65,6 +66,8 @@ class _NoOpTrayAdapter implements DesktopTrayAdapter {
   void removeListener(TrayListener listener) {}
   @override
   Future<void> setContextMenu(Menu menu) async {}
+  @override
+  Future<void> popUpContextMenu() async {}
   @override
   Future<void> setIcon(String iconPath) async {}
   @override
@@ -412,6 +415,174 @@ void main() {
       chatCtrl.dispose();
       seededChatCtrl.dispose();
       toolCtrl.dispose();
+    });
+
+    testWidgets('Slice 6C renders 7-day weather & reminder consumer cards without raw debug pills', (tester) async {
+      tester.view.physicalSize = const Size(1280, 820);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final sessStore = InMemoryCredentialStore()..writeToken('sess-1');
+      final mockHttp = MockClient((req) async {
+        if (req.url.path == '/api/v1/conversations/conv-wx/messages') {
+          return http.Response.bytes(
+            utf8.encode(
+              jsonEncode({
+              'total': 3,
+              'items': [
+                {
+                  'id': 'm-wx',
+                  'conversation_id': 'conv-wx',
+                  'sender': 'assistant',
+                  'content': 'Expect moderate drizzle tomorrow in Caloocan (24.8–31.3°C).',
+                  'status': 'completed',
+                  'sequence_no': 1,
+                  'created_at': '2026-11-20T10:00:00Z',
+                  'attachments': <dynamic>[],
+                  'tool_receipts': [
+                    {
+                      'tool_name': 'weather_lookup',
+                      'risk_tier': 0,
+                      'provenance': 'EXPLICIT_USER',
+                      'decision': 'ALLOW',
+                      'outcome_status': 'executed',
+                      'summary':
+                          'Weather in Caloocan, Philippines: Partly cloudy, 26.7°C now. 7-day forecast: 2026-11-20: Thunderstorm (25.7–30.6°C, rain 100%); 2026-11-21: Moderate drizzle (24.8–31.3°C, rain 51%); 2026-11-22: Clear sky (24.5–32.0°C, rain 10%); 2026-11-23: Partly cloudy (25.0–31.5°C, rain 20%); 2026-11-24: Light rain (24.1–29.8°C, rain 70%); 2026-11-25: Overcast (24.6–30.4°C, rain 40%); 2026-11-26: Clear sky (25.2–32.1°C, rain 5%).',
+                    }
+                  ],
+                  'sources': [
+                    {
+                      'title': 'Open-Meteo Forecast (Caloocan, Philippines)',
+                      'url': 'https://api.open-meteo.com/v1/forecast?latitude=14.65&longitude=120.97&forecast_days=7',
+                      'domain': 'api.open-meteo.com',
+                    }
+                  ],
+                  'pending_confirmations': <dynamic>[],
+                },
+                {
+                  'id': 'm-rem',
+                  'conversation_id': 'conv-wx',
+                  'sender': 'assistant',
+                  'content': 'I have scheduled your reminder for December 8.',
+                  'status': 'completed',
+                  'sequence_no': 2,
+                  'created_at': '2026-11-20T10:01:00Z',
+                  'attachments': <dynamic>[],
+                  'tool_receipts': [
+                    {
+                      'tool_name': 'create_reminder',
+                      'risk_tier': 1,
+                      'provenance': 'EXPLICIT_USER',
+                      'decision': 'ALLOW',
+                      'outcome_status': 'executed',
+                      'summary': "Created reminder 'Wedding suit fitting' for 2026-12-08T09:00+08:00.",
+                    }
+                  ],
+                  'sources': <dynamic>[],
+                  'pending_confirmations': <dynamic>[],
+                },
+                {
+                  'id': 'm-web',
+                  'conversation_id': 'conv-wx',
+                  'sender': 'assistant',
+                  'content': 'GTA VI is scheduled for release next year.',
+                  'status': 'completed',
+                  'sequence_no': 3,
+                  'created_at': '2026-11-20T10:02:00Z',
+                  'attachments': <dynamic>[],
+                  'tool_receipts': [
+                    {
+                      'tool_name': 'web_search',
+                      'risk_tier': 0,
+                      'provenance': 'EXPLICIT_USER',
+                      'decision': 'ALLOW',
+                      'outcome_status': 'executed',
+                      'summary': 'Found 5 public web results.',
+                    }
+                  ],
+                  'sources': [
+                    {
+                      'title': 'Rockstar Games News',
+                      'url': 'https://www.rockstargames.com/newswire',
+                      'domain': 'www.rockstargames.com',
+                    }
+                  ],
+                  'pending_confirmations': <dynamic>[],
+                },
+              ],
+            }),
+            ),
+            200,
+            headers: const {'content-type': 'application/json; charset=utf-8'},
+          );
+        }
+        return http.Response('{}', 200);
+      });
+
+      final client = CompanionClient(
+        baseUrl: 'http://127.0.0.1:8000',
+        httpClient: mockHttp,
+        sessionStore: sessStore,
+      );
+      final chatCtrl = DesktopChatController(client: client);
+      await chatCtrl.selectConversation(
+        const ConversationOut(
+          id: 'conv-wx',
+          title: 'Consumer Cards',
+          characterId: 'default',
+          ownerId: 'p1',
+          createdAt: '2026-11-20T10:00:00Z',
+          updatedAt: '2026-11-20T10:02:00Z',
+          messageCount: 3,
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: ChatScreen(controller: chatCtrl),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Raw developer receipt labels must NOT appear for executed consumer tools
+      expect(find.textContaining('weather_lookup · executed'), findsNothing);
+      expect(find.textContaining('create_reminder · executed'), findsNothing);
+      expect(find.textContaining('web_search · executed'), findsNothing);
+
+      // Auto-visible Weather Widget card & 7-day horizontally scrollable strip appear cleanly
+      expect(find.byKey(const Key('weather_widget_card')), findsOneWidget);
+      final wxStripFinder = find.byKey(const Key('weather_forecast_scroll_strip'));
+      expect(wxStripFinder, findsOneWidget);
+      expect(
+        find.descendant(of: wxStripFinder, matching: find.byType(Scrollbar)),
+        findsOneWidget,
+      );
+      expect(find.text('Caloocan, Philippines'), findsOneWidget);
+      expect(find.textContaining('26.7°C'), findsOneWidget);
+      expect(find.textContaining('Moderate drizzle'), findsWidgets);
+
+      // Drag horizontally with mouse inside the forecast strip to scroll to later days
+      final stripScrollable = find.descendant(
+        of: wxStripFinder,
+        matching: find.byType(Scrollable),
+      );
+      final beforeOffset = tester.state<ScrollableState>(stripScrollable).position.pixels;
+      await tester.drag(wxStripFinder, const Offset(-320, 0), kind: PointerDeviceKind.mouse);
+      await tester.pumpAndSettle();
+      final afterOffset = tester.state<ScrollableState>(stripScrollable).position.pixels;
+      expect(afterOffset, greaterThan(beforeOffset));
+
+      // Consumer Action Card renders cleanly for create_reminder
+      expect(find.byKey(const Key('assistant_action_card_create_reminder')), findsOneWidget);
+      expect(find.text('Reminder Set'), findsOneWidget);
+
+      // Clean Sources pill remains visible for web_search
+      expect(find.byKey(const Key('sources_toggle_m-web')), findsOneWidget);
+
+      chatCtrl.dispose();
     });
   });
 }

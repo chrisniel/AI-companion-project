@@ -1,6 +1,7 @@
 import 'package:companion_api/companion_api.dart';
 import 'package:companion_design/companion_design.dart';
 import 'package:flutter/material.dart';
+import '../voice/desktop_voice_controller.dart';
 import 'character_stage_presenter.dart';
 import 'desktop_studio_controller.dart';
 
@@ -15,6 +16,7 @@ class StudioInspectorPanel extends StatefulWidget {
   const StudioInspectorPanel({
     super.key,
     required this.controller,
+    this.voiceController,
     required this.onSave,
     required this.onActivate,
     required this.onResetNeutral,
@@ -22,6 +24,7 @@ class StudioInspectorPanel extends StatefulWidget {
   });
 
   final DesktopStudioController controller;
+  final DesktopVoiceController? voiceController;
   final VoidCallback onSave;
   final ValueChanged<String> onActivate;
   final VoidCallback onResetNeutral;
@@ -631,7 +634,117 @@ class _StudioInspectorPanelState extends State<StudioInspectorPanel> {
             setState(() {});
           },
         ),
+        const SizedBox(height: 16.0),
+
+        // Character Voice override + preview
+        _buildVoiceOverrideRow(context, draft),
       ],
+    );
+  }
+
+  Widget _buildVoiceOverrideRow(
+    BuildContext context,
+    CharacterStudioDraft draft,
+  ) {
+    final ext = Theme.of(context).extension<CompanionThemeExtension>();
+    final voiceCtrl = widget.voiceController;
+
+    Widget buildContent() {
+      final voices = voiceCtrl?.voiceCatalog?.voices ?? const <VoiceDescriptorOut>[];
+      final selectedVoiceId = draft.voiceId;
+      final hasMatch = selectedVoiceId == null ||
+          voices.any((v) => v.voiceId == selectedVoiceId);
+
+      final items = <DropdownMenuItem<String?>>[
+        const DropdownMenuItem<String?>(
+          value: null,
+          child: Text('Profile Default', overflow: TextOverflow.ellipsis),
+        ),
+        for (final voice in voices)
+          DropdownMenuItem<String?>(
+            value: voice.voiceId,
+            child: Text(
+              '${voice.name} (${voice.language})',
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        if (!hasMatch)
+          DropdownMenuItem<String?>(
+            value: selectedVoiceId,
+            child: Text(
+              '$selectedVoiceId (Saved)',
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+      ];
+
+      final canPreview = voiceCtrl != null &&
+          (voiceCtrl.voiceStatus?.ttsAvailable ?? voices.isNotEmpty);
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Character Voice',
+            style: CompanionTypography.titleSmall.copyWith(
+              color: ext?.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 6.0),
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<String?>(
+                  key: const ValueKey('studio_voice_dropdown'),
+                  initialValue: selectedVoiceId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'TTS Voice Override',
+                  ),
+                  items: items,
+                  onChanged: draft.isReadOnly
+                      ? null
+                      : (val) => draft.updateVoiceId(val),
+                ),
+              ),
+              const SizedBox(width: 8.0),
+              Semantics(
+                button: true,
+                label: 'Preview character voice',
+                child: Tooltip(
+                  message: canPreview
+                      ? 'Preview selected voice'
+                      : 'TTS voice preview unavailable while voice runtime is offline',
+                  child: IconButton(
+                    key: const ValueKey('studio_voice_preview_button'),
+                    onPressed: canPreview
+                        ? () => voiceCtrl.previewVoice(selectedVoiceId)
+                        : null,
+                    icon: const Icon(Icons.volume_up_rounded),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4.0),
+          Text(
+            draft.isReadOnly
+                ? 'Legacy character is read-only; voice override cannot be edited.'
+                : 'Leave on Profile Default to inherit Voice & Audio settings.',
+            style: CompanionTypography.caption.copyWith(
+              color: ext?.textSecondary,
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (voiceCtrl == null) {
+      return buildContent();
+    }
+    return ListenableBuilder(
+      listenable: voiceCtrl,
+      builder: (context, _) => buildContent(),
     );
   }
 

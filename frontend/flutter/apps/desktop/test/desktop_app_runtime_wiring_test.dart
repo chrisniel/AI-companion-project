@@ -65,6 +65,8 @@ class MockTrayAdapter implements DesktopTrayAdapter {
     lastMenu = menu;
   }
   @override
+  Future<void> popUpContextMenu() async {}
+  @override
   Future<void> destroy() async {}
   @override
   void addListener(TrayListener listener) {}

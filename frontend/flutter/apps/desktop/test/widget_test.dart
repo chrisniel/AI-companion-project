@@ -23,7 +23,7 @@ void main() {
 
     expect(find.text('AI Companion'), findsWidgets);
     expect(find.text('Chat'), findsWidgets);
-    expect(find.text('Voice'), findsOneWidget);
+    expect(find.text('Voice'), findsNothing);
     expect(find.text('Settings'), findsOneWidget);
     expect(find.text('Runtime: Standalone (Unconnected)'), findsWidgets);
   });
