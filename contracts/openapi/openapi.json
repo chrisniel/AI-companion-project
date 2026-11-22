@@ -5085,7 +5085,7 @@
     "/api/v1/models/profile": {
       "patch": {
         "summary": "Update hardware performance profile",
-        "description": "Switch hardware profile (eco, balanced, maximum).",
+        "description": "Switch hardware profile (eco, balanced, maximum) and optional experimental context mode.",
         "operationId": "update_profile_api_v1_models_profile_patch",
         "parameters": [
           {
@@ -9165,6 +9165,15 @@
               }
             ],
             "title": "License"
+          },
+          "transfer_mode": {
+            "type": "string",
+            "enum": [
+              "move",
+              "copy"
+            ],
+            "title": "Transfer Mode",
+            "default": "move"
           }
         },
         "additionalProperties": false,
@@ -9431,6 +9440,22 @@
               "maximum"
             ],
             "title": "Profile"
+          },
+          "context_mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "profile",
+                  "16k",
+                  "model_max"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context Mode"
           }
         },
         "additionalProperties": false,
@@ -9622,6 +9647,11 @@
             "title": "Requested Profile",
             "default": "balanced"
           },
+          "requested_context_mode": {
+            "type": "string",
+            "title": "Requested Context Mode",
+            "default": "profile"
+          },
           "applied_profile": {
             "anyOf": [
               {
@@ -9670,6 +9700,39 @@
               }
             ],
             "title": "Applied Mmproj Offload"
+          },
+          "host_gpu_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Host Gpu Name"
+          },
+          "host_vram_gb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Host Vram Gb"
+          },
+          "host_ram_gb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Host Ram Gb"
           },
           "generation_active": {
             "type": "boolean",

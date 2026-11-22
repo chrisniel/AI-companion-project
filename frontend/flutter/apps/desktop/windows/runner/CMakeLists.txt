@@ -13,6 +13,8 @@ add_executable(${BINARY_NAME} WIN32
   "win32_window.cpp"
   "windows_audio_channel.cpp"
   "windows_audio_channel.h"
+  "windows_shell_channel.cpp"
+  "windows_shell_channel.h"
   "windows_toast_channel.cpp"
   "windows_toast_channel.h"
   "${FLUTTER_MANAGED_DIR}/generated_plugin_registrant.cc"
@@ -37,7 +39,7 @@ target_compile_definitions(${BINARY_NAME} PRIVATE "NOMINMAX")
 # Add dependency libraries and include directories. Add any application-specific
 # dependencies here.
 target_link_libraries(${BINARY_NAME} PRIVATE flutter flutter_wrapper_app)
-target_link_libraries(${BINARY_NAME} PRIVATE "dwmapi.lib" "runtimeobject.lib" "shlwapi.lib" "winmm.lib" "propsys.lib" "ole32.lib")
+target_link_libraries(${BINARY_NAME} PRIVATE "dwmapi.lib" "runtimeobject.lib" "shlwapi.lib" "winmm.lib" "propsys.lib" "ole32.lib" "shell32.lib")
 target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 
 # Run the Flutter tool portions of the build. This must not be removed.

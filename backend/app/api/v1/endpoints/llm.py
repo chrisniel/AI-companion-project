@@ -187,12 +187,19 @@ async def update_profile(
     request: ModelProfileUpdateRequest,
     provider: BaseLLMProvider = Depends(get_llm_provider),
 ) -> ModelStatusResponse:
-    """Switch hardware profile (eco, balanced, maximum)."""
-    success = await provider.set_profile(request.profile)
+    """Switch hardware profile (eco, balanced, maximum) and optional experimental context mode."""
+    import inspect
+
+    set_fn = provider.set_profile
+    sig = inspect.signature(set_fn)
+    if "context_mode" in sig.parameters:
+        success = await set_fn(request.profile, context_mode=request.context_mode)
+    else:
+        success = await set_fn(request.profile)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid hardware profile '{request.profile}'.",
+            detail=f"Invalid hardware profile or context mode '{request.profile}'.",
         )
     return await provider.get_status()
 

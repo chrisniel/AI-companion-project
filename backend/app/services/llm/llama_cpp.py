@@ -19,10 +19,14 @@ import httpx
 from app.core.config import settings
 from app.schemas.llm import ChatMessage, ModelStatusResponse
 from app.schemas.multimodal import ContentBlock, ResolvedImageContent, TextContent
+from app.services.hardware_probe import probe_host_hardware
 from app.services.host_config import (
+    VALID_CONTEXT_MODES,
+    get_saved_context_mode,
     get_saved_hardware_profile,
     get_saved_model_selection,
     resolve_effective_model,
+    save_context_mode,
     save_hardware_profile,
     save_model_selection,
 )
@@ -224,6 +228,7 @@ class LlamaCppProvider(BaseLLMProvider):
         self._active_model_name: Optional[str] = None
         self._active_models_dir: Optional[Path] = None
         self._active_profile: str = get_saved_hardware_profile() or settings.LLM_PROFILE  # Requested profile
+        self._context_mode: str = get_saved_context_mode()
         self._applied_profile: Optional[str] = None       # Verified applied launch profile
         self._applied_context_size: Optional[int] = None
         self._applied_gpu_layers: Optional[int] = None
@@ -505,30 +510,44 @@ class LlamaCppProvider(BaseLLMProvider):
 
         return settings.MODELS_DIR / target
 
-    def _get_profile_params(self, profile: str) -> Dict[str, Any]:
-        """Map performance profiles (Section 13) to technical context, VRAM layers, and mmproj offload."""
+    def _get_profile_params(
+        self,
+        profile: str,
+        *,
+        model_max_context: Optional[int] = None,
+        context_mode: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Map performance profiles (Section 13) + optional experimental >8K context override."""
         p = profile.lower()
         if p == "eco":
-            return {
+            params = {
                 "n_ctx": settings.PROFILE_ECO_CTX,
                 "n_gpu_layers": settings.PROFILE_ECO_GPU_LAYERS,
                 "n_threads": settings.PROFILE_ECO_THREADS,
                 "mmproj_offload": settings.PROFILE_ECO_MMPROJ_OFFLOAD,
             }
         elif p == "maximum":
-            return {
+            params = {
                 "n_ctx": settings.PROFILE_MAXIMUM_CTX,
                 "n_gpu_layers": settings.PROFILE_MAXIMUM_GPU_LAYERS,
                 "n_threads": settings.PROFILE_MAXIMUM_THREADS,
                 "mmproj_offload": settings.PROFILE_MAXIMUM_MMPROJ_OFFLOAD,
             }
         else:  # balanced or fallback
-            return {
+            params = {
                 "n_ctx": settings.PROFILE_BALANCED_CTX,
                 "n_gpu_layers": settings.PROFILE_BALANCED_GPU_LAYERS,
                 "n_threads": settings.PROFILE_BALANCED_THREADS,
                 "mmproj_offload": settings.PROFILE_BALANCED_MMPROJ_OFFLOAD,
             }
+
+        mode = (context_mode if context_mode is not None else getattr(self, "_context_mode", "profile")) or "profile"
+        safe_max = model_max_context if isinstance(model_max_context, int) and not isinstance(model_max_context, bool) else None
+        if mode == "16k":
+            params["n_ctx"] = min(16384, safe_max) if (safe_max and safe_max >= 4096) else 16384
+        elif mode == "model_max":
+            params["n_ctx"] = min(max(safe_max or 32768, 4096), 131072)
+        return params
 
     def _check_port_listening(self, host: str, port: int) -> bool:
         """Check whether a TCP port is currently open and accepting connections."""
@@ -738,7 +757,13 @@ class LlamaCppProvider(BaseLLMProvider):
                         self._runtime_state = LLMRuntimeState.MODEL_ERROR
                         return False
 
-                    params = self._get_profile_params(self._active_profile)
+                    manifest_obj = getattr(registry_entry, "manifest", None)
+                    raw_max_ctx = getattr(manifest_obj, "model_max_context", None) if manifest_obj is not None else None
+                    model_max_ctx = raw_max_ctx if isinstance(raw_max_ctx, int) and not isinstance(raw_max_ctx, bool) else None
+                    params = self._get_profile_params(
+                        self._active_profile,
+                        model_max_context=model_max_ctx,
+                    )
                     logger.info(
                         f"Launching standalone llama-server router with Vulkan offload "
                         f"({params['n_gpu_layers']} GPU layers, ctx={params['n_ctx']}, threads={params['n_threads']}, model={target_model_name})..."
@@ -935,24 +960,40 @@ class LlamaCppProvider(BaseLLMProvider):
             self._active_model_name = None
             return True
 
-    async def set_profile(self, profile: str) -> bool:
+    async def set_profile(
+        self,
+        profile: str,
+        context_mode: Optional[str] = None,
+    ) -> bool:
         async with self._lock:
             p = profile.lower()
             if p not in ("eco", "balanced", "maximum"):
                 return False
+            next_ctx_mode = self._context_mode
+            if context_mode is not None:
+                normalized_ctx = context_mode.strip().lower()
+                if normalized_ctx not in VALID_CONTEXT_MODES:
+                    return False
+                next_ctx_mode = normalized_ctx
             if self.has_active_generation or self._closing:
                 logger.warning(f"Cannot change profile to '{p}' while generation is active")
                 return False
 
             old_profile = self._active_profile
+            old_ctx_mode = self._context_mode
             self._active_profile = p
+            self._context_mode = next_ctx_mode
             save_hardware_profile(p)
-            logger.info(f"LLM hardware profile set from '{old_profile}' to '{p}'")
+            if context_mode is not None:
+                save_context_mode(next_ctx_mode)
+            logger.info(
+                f"LLM hardware profile set from '{old_profile}' (ctx={old_ctx_mode}) to '{p}' (ctx={next_ctx_mode})"
+            )
 
             # Evidence-gated profile reconfiguration:
             # If a Core-managed router process is running, terminate it cleanly so
             # that subsequent activations use the newly requested profile launch args.
-            if old_profile != p and self._managed_by_core and self._server_process and self._server_process.poll() is None:
+            if (old_profile != p or old_ctx_mode != next_ctx_mode) and self._managed_by_core and self._server_process and self._server_process.poll() is None:
                 logger.info(f"Terminating Core-managed router PID={self._server_pid} to apply profile '{p}' on next activation")
                 if self._active_model_name and self._server_is_active:
                     try:
@@ -1157,7 +1198,26 @@ class LlamaCppProvider(BaseLLMProvider):
             else:
                 self._runtime_state = LLMRuntimeState.MODEL_UNLOADED
 
-        req_params = self._get_profile_params(self._active_profile)
+        entries_list = build_model_list()
+        saved_selection = get_saved_model_selection()
+        selected_entry = find_model_registry_entry(
+            self._active_model_name or saved_selection,
+            entries=entries_list,
+        )
+        raw_entry_ctx = (
+            getattr(getattr(selected_entry, "manifest", None), "model_max_context", None)
+            if selected_entry is not None
+            else None
+        )
+        entry_max_ctx = (
+            raw_entry_ctx
+            if isinstance(raw_entry_ctx, int) and not isinstance(raw_entry_ctx, bool)
+            else None
+        )
+        req_params = self._get_profile_params(
+            self._active_profile,
+            model_max_context=entry_max_ctx,
+        )
         available = []
         for root_dir in (settings.MODELS_DIR, settings.MODEL_LIBRARY_DIR):
             if root_dir.exists():
@@ -1172,7 +1232,7 @@ class LlamaCppProvider(BaseLLMProvider):
                         if rel not in available:
                             available.append(rel)
 
-        registry_entries = [m.manifest.primary_file for m in build_model_list() if m.library_state.primary_file_exists]
+        registry_entries = [m.manifest.primary_file for m in entries_list if m.library_state.primary_file_exists]
 
         # Determine residency & readiness booleans
         model_resident = (self._runtime_state == LLMRuntimeState.MODEL_READY and bool(self._active_model_name))
@@ -1203,6 +1263,8 @@ class LlamaCppProvider(BaseLLMProvider):
         compat_mmproj_offload = effective_applied_mmproj if effective_applied_mmproj is not None else requested_mmproj_offload
 
 
+        hw = probe_host_hardware()
+
         return ModelStatusResponse(
             provider=self.provider_name,
             engine_version=self._engine_version,
@@ -1210,16 +1272,20 @@ class LlamaCppProvider(BaseLLMProvider):
             managed_by_core=self._managed_by_core and router_running,
             runtime_state=self._runtime_state,
             active_model=self._active_model_name if is_loaded else None,
-            selected_model=get_saved_model_selection(),
+            selected_model=saved_selection,
             model_resident=model_resident,
             model_loaded=model_loaded,
             model_awake=model_awake,
             requested_profile=self._active_profile,
+            requested_context_mode=getattr(self, "_context_mode", "profile"),
             applied_profile=effective_applied_profile,
             applied_context_size=effective_applied_ctx,
             applied_gpu_layers=effective_applied_ngl,
             requested_mmproj_offload=requested_mmproj_offload,
             applied_mmproj_offload=effective_applied_mmproj,
+            host_gpu_name=hw.gpu_name,
+            host_vram_gb=hw.dedicated_vram_gb,
+            host_ram_gb=hw.total_ram_gb,
             mmproj_offload=compat_mmproj_offload,
             generation_active=self.has_active_generation,
             last_runtime_error=self._last_error,

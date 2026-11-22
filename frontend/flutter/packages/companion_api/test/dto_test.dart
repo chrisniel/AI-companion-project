@@ -77,6 +77,7 @@ void main() {
         'model_loaded': true,
         'model_awake': true,
         'requested_profile': 'balanced',
+        'requested_context_mode': 'profile',
         'requested_mmproj_offload': true,
         'generation_active': false,
         'mmproj_offload': true,

@@ -28,6 +28,8 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
   audio_channel_ = std::make_unique<WindowsAudioChannel>(
       flutter_controller_->engine()->messenger(), GetHandle());
+  shell_channel_ = std::make_unique<WindowsShellChannel>(
+      flutter_controller_->engine()->messenger(), GetHandle());
   toast_channel_ = std::make_unique<WindowsToastChannel>(
       flutter_controller_->engine()->messenger(), GetHandle());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
@@ -49,6 +51,9 @@ bool FlutterWindow::OnCreate() {
 void FlutterWindow::OnDestroy() {
   if (audio_channel_) {
     audio_channel_.reset();
+  }
+  if (shell_channel_) {
+    shell_channel_.reset();
   }
   if (toast_channel_) {
     toast_channel_.reset();

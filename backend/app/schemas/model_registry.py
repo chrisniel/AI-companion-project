@@ -192,6 +192,7 @@ class ModelImportInstallRequest(BaseSchema):
     variant: Optional[ModelVariant] = None
     family: Optional[str] = None
     license: Optional[str] = None
+    transfer_mode: Literal["move", "copy"] = "move"
 
 
 class ModelImportInstallOut(BaseSchema):

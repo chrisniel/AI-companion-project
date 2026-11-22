@@ -6,24 +6,31 @@ import 'package:companion_design/companion_design.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../controllers/desktop_settings_controller.dart';
 import '../../../platform/desktop_client_settings.dart';
 import '../../../platform/host_admin_secret_store.dart';
 import '../../../platform/windows_dpapi_credential_store.dart';
+import '../../../platform/windows_shell_adapter.dart';
 
-/// Fail-closed Windows storage root inspection, live 5-root telemetry & LIBRARY_ROOT relocation.
+/// Consumer-first Model & Voice Library Folder selector + collapsible
+/// fail-closed five-root diagnostics.
 class SettingsStorageSection extends StatefulWidget {
   const SettingsStorageSection({
     super.key,
     required this.diagnosticReader,
+    this.controller,
     this.client,
     this.clientSettings,
     this.credentialStore,
+    this.shellAdapter,
   });
 
   final StorageDiagnosticReader diagnosticReader;
+  final DesktopSettingsController? controller;
   final CompanionClient? client;
   final DesktopClientSettings? clientSettings;
   final CredentialStore? credentialStore;
+  final DesktopShellAdapter? shellAdapter;
 
   @override
   State<SettingsStorageSection> createState() => _SettingsStorageSectionState();
@@ -37,12 +44,21 @@ class _SettingsStorageSectionState extends State<SettingsStorageSection> {
   bool _isLoadingBackend = false;
   bool _isRelocating = false;
   bool _migrateAssets = true;
+  bool _advancedUserToggled = false;
+  bool _advancedExpanded = false;
+  String _lastLoadedLibraryRoot = '';
   String? _backendMessage;
+
+  DesktopShellAdapter get _shell =>
+      widget.shellAdapter ?? WindowsShellAdapter();
 
   @override
   void initState() {
     super.initState();
     _rootsFuture = widget.diagnosticReader.readDiagnosticRoots();
+    if (widget.client == null) {
+      _advancedExpanded = true;
+    }
     if (widget.client != null ||
         !Platform.environment.containsKey('FLUTTER_TEST')) {
       _loadBackendStorage();
@@ -65,6 +81,8 @@ class _SettingsStorageSectionState extends State<SettingsStorageSection> {
     _relocateController.dispose();
     super.dispose();
   }
+
+  String _formatError(Object e) => e is CompanionApiException ? e.message : '$e';
 
   Future<CompanionClient> _resolveClient() async {
     if (widget.client != null) return widget.client!;
@@ -89,17 +107,31 @@ class _SettingsStorageSectionState extends State<SettingsStorageSection> {
       setState(() {
         _backendRoots = res;
         _isLoadingBackend = false;
-        if (_relocateController.text.isEmpty) {
+        if (_relocateController.text.isEmpty ||
+            _relocateController.text == _lastLoadedLibraryRoot) {
           _relocateController.text = res.libraryRoot;
         }
+        _lastLoadedLibraryRoot = res.libraryRoot;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _isLoadingBackend = false;
-        _backendMessage = 'Backend storage telemetry unavailable: $e';
+        _backendMessage = 'Storage service unavailable: ${_formatError(e)}';
       });
     }
+  }
+
+  Future<void> _pickLibraryFolder() async {
+    final chosen = await _shell.pickFolder(
+      title: 'Choose Folder for Your AI Models & Voices',
+      initialDirectory: _relocateController.text.trim(),
+    );
+    if (chosen == null || chosen.isEmpty || !mounted) return;
+    setState(() {
+      _relocateController.text = chosen;
+      _backendMessage = 'Selected folder: $chosen. Click Move Library to apply.';
+    });
   }
 
   Future<void> _relocateLibrary() async {
@@ -107,7 +139,7 @@ class _SettingsStorageSectionState extends State<SettingsStorageSection> {
     if (target.isEmpty || _isRelocating) return;
     setState(() {
       _isRelocating = true;
-      _backendMessage = 'Relocating LIBRARY_ROOT...';
+      _backendMessage = 'Moving model & voice library...';
     });
     try {
       final client = await _resolveClient();
@@ -122,13 +154,15 @@ class _SettingsStorageSectionState extends State<SettingsStorageSection> {
         _backendRoots = updated;
         _relocateController.text = updated.libraryRoot;
         _isRelocating = false;
-        _backendMessage = 'LIBRARY_ROOT relocated to ${updated.libraryRoot}';
+        _backendMessage = 'Model & Voice Library moved to ${updated.libraryRoot}';
+        _rootsFuture = widget.diagnosticReader.readDiagnosticRoots();
       });
+      widget.controller?.notifyStorageChanged();
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _isRelocating = false;
-        _backendMessage = 'Relocation failed: $e';
+        _backendMessage = 'Could not move library: ${_formatError(e)}';
       });
     }
   }
@@ -137,17 +171,12 @@ class _SettingsStorageSectionState extends State<SettingsStorageSection> {
     await Clipboard.setData(ClipboardData(text: path));
     if (!mounted) return;
     setState(() {
-      _backendMessage = 'Copied path to clipboard.';
+      _backendMessage = 'Copied folder path to clipboard.';
     });
   }
 
   Future<void> _openInExplorer(String path) async {
-    if (!Platform.isWindows || Platform.environment.containsKey('FLUTTER_TEST')) {
-      return;
-    }
-    try {
-      await Process.run('explorer.exe', [path]);
-    } catch (_) {}
+    await _shell.openFolder(path, createIfMissing: true);
   }
 
   String _formatBytes(int? bytes) {
@@ -158,6 +187,14 @@ class _SettingsStorageSectionState extends State<SettingsStorageSection> {
     return '${mb.toStringAsFixed(0)} MB';
   }
 
+  StorageRootOut? _findLibraryRoot(StorageRootsResponse? resp) {
+    if (resp == null) return null;
+    for (final root in resp.roots) {
+      if (root.key == 'library') return root;
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final ext = Theme.of(context).extension<CompanionThemeExtension>();
@@ -166,114 +203,17 @@ class _SettingsStorageSectionState extends State<SettingsStorageSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        FutureBuilder<List<StorageDiagnosticInfo>>(
-          future: _rootsFuture,
-          builder: (context, snapshot) {
-            final roots = snapshot.data ?? [];
-            final locatorInfo = roots.isNotEmpty ? roots.first : null;
-
-            return SoftGlassPanel(
-              padding: const EdgeInsets.all(CompanionSpacing.xl),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Wrap(
-                    alignment: WrapAlignment.spaceBetween,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: CompanionSpacing.sm,
-                    runSpacing: CompanionSpacing.xs,
-                    children: [
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.folder_special_outlined,
-                            size: 20,
-                            color: ext?.accent,
-                          ),
-                          const SizedBox(width: CompanionSpacing.sm),
-                          Flexible(
-                            child: Text(
-                              'Storage Diagnostics',
-                              style: CompanionTypography.titleMedium
-                                  .copyWith(color: ext?.textPrimary),
-                            ),
-                          ),
-                        ],
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isDark
-                              ? Colors.white.withValues(alpha: 0.06)
-                              : Colors.black.withValues(alpha: 0.04),
-                          borderRadius: CompanionRadius.borderSm,
-                        ),
-                        child: Text(
-                          'Client Fail-Closed Inspection',
-                          style: CompanionTypography.caption
-                              .copyWith(color: ext?.textSecondary),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: CompanionSpacing.md),
-                  Text(
-                    'Inspecting canonical Windows persistent storage roots. '
-                    'Client diagnostics verify local bootstrap configuration even when the backend is stopped.',
-                    style: CompanionTypography.bodySmall
-                        .copyWith(color: ext?.textSecondary),
-                  ),
-                  const SizedBox(height: CompanionSpacing.lg),
-                  if (locatorInfo != null) ...[
-                    _buildDiagnosticItem(
-                      ext: ext,
-                      label: 'Bootstrap Locator',
-                      path: r'%LOCALAPPDATA%\AI Companion\bootstrap.json',
-                      status: locatorInfo.locatorStatus,
-                      details: locatorInfo.details ?? 'Evaluated',
-                    ),
-                    const SizedBox(height: CompanionSpacing.md),
-                    if (locatorInfo.resolvedPath != null) ...[
-                      _buildDiagnosticItem(
-                        ext: ext,
-                        label: 'Configured Storage Root (DATA)',
-                        path: locatorInfo.resolvedPath,
-                        status: locatorInfo.locatorStatus,
-                        details: locatorInfo.details ?? '',
-                      ),
-                      const SizedBox(height: CompanionSpacing.md),
-                    ],
-                  ],
-                  for (final root in roots.skip(1)) ...[
-                    _buildDiagnosticItem(
-                      ext: ext,
-                      label: _labelForRootType(root.rootType),
-                      path: root.resolvedPath,
-                      status: root.locatorStatus,
-                      details: root.details ?? '',
-                    ),
-                    const SizedBox(height: CompanionSpacing.md),
-                  ],
-                ],
-              ),
-            );
-          },
-        ),
+        _buildLibraryFolderCard(ext),
         const SizedBox(height: CompanionSpacing.lg),
-        _buildBackendStoragePanel(ext, isDark),
+        _buildAdvancedDiagnosticsAccordion(ext, isDark),
       ],
     );
   }
 
-  Widget _buildBackendStoragePanel(
-    CompanionThemeExtension? ext,
-    bool isDark,
-  ) {
+  Widget _buildLibraryFolderCard(CompanionThemeExtension? ext) {
     final backend = _backendRoots;
+    final libRoot = _findLibraryRoot(backend);
+
     return SoftGlassPanel(
       padding: const EdgeInsets.all(CompanionSpacing.xl),
       child: Column(
@@ -281,136 +221,127 @@ class _SettingsStorageSectionState extends State<SettingsStorageSection> {
         children: [
           Row(
             children: [
-              Icon(Icons.drive_file_move_outlined, size: 20, color: ext?.accent),
+              Icon(Icons.folder_copy_outlined, size: 20, color: ext?.accent),
               const SizedBox(width: CompanionSpacing.sm),
               Expanded(
                 child: Text(
-                  'Five Storage Roots & Relocatable Library (PC-HOST-004)',
+                  'Model & Voice Library Folder',
                   style: CompanionTypography.titleMedium
                       .copyWith(color: ext?.textPrimary),
                 ),
               ),
-              IconButton(
+              OutlinedButton.icon(
+                key: const Key('storage_top_refresh_button'),
                 onPressed: _isLoadingBackend ? null : _loadBackendStorage,
                 icon: _isLoadingBackend
                     ? const SizedBox(
-                        width: 16,
-                        height: 16,
+                        width: 14,
+                        height: 14,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.refresh_rounded, size: 18),
-                tooltip: 'Refresh Backend Storage Telemetry',
+                    : const Icon(Icons.refresh_rounded, size: 16),
+                label: const Text('Refresh'),
               ),
             ],
           ),
           const SizedBox(height: CompanionSpacing.xs),
           Text(
-            'Relocate the large Model & Voice Library Root across drives while keeping the SQLite database anchored on DATA_ROOT.',
-            style: CompanionTypography.caption
+            'Large local AI models and voice assets are stored here. App settings, chat history, cache, and logs stay automatically organized in your app folder.',
+            style: CompanionTypography.bodySmall
                 .copyWith(color: ext?.textSecondary),
           ),
           const SizedBox(height: CompanionSpacing.md),
           if (backend != null) ...[
-            for (final root in backend.roots) ...[
-              NeumorphicSurface(
-                surfaceType: NeumorphicSurfaceType.recessed,
-                borderRadius: CompanionRadius.borderMd,
-                padding: const EdgeInsets.all(CompanionSpacing.md),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            root.label,
-                            style: CompanionTypography.bodySmall.copyWith(
-                              color: ext?.textPrimary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: ext?.accent.withValues(alpha: 0.14),
-                            borderRadius: CompanionRadius.borderSm,
-                          ),
-                          child: Text(
-                            'Source: ${root.source}',
-                            style: CompanionTypography.caption.copyWith(
-                              color: ext?.accent,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 10,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    SelectableText(
-                      root.path,
-                      style: CompanionTypography.caption.copyWith(
-                        color: ext?.textSecondary,
-                        fontFamily: 'monospace',
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: CompanionSpacing.sm,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        Text(
-                          root.exists ? 'On Disk' : 'Created Lazily on First Use',
+            NeumorphicSurface(
+              surfaceType: NeumorphicSurfaceType.recessed,
+              borderRadius: CompanionRadius.borderMd,
+              padding: const EdgeInsets.all(CompanionSpacing.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Current Library Location',
                           style: CompanionTypography.caption.copyWith(
-                            color: root.exists
-                                ? (ext?.success ?? CompanionColors.success)
-                                : ext?.textMuted,
+                            color: ext?.textSecondary,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                        if (root.freeBytes != null)
-                          Text(
-                            'Free: ${_formatBytes(root.freeBytes)} / ${_formatBytes(root.totalBytes)}',
-                            style: CompanionTypography.caption
-                                .copyWith(color: ext?.textSecondary),
+                      ),
+                      if (libRoot?.freeBytes != null)
+                        Text(
+                          '${_formatBytes(libRoot!.freeBytes)} free of ${_formatBytes(libRoot.totalBytes)}',
+                          style: CompanionTypography.caption.copyWith(
+                            color: ext?.accent,
+                            fontWeight: FontWeight.w600,
                           ),
-                        TextButton.icon(
-                          onPressed: () => _copyPath(root.path),
-                          icon: const Icon(Icons.copy_rounded, size: 14),
-                          label: const Text('Copy Path'),
                         ),
-                        if (Platform.isWindows)
-                          TextButton.icon(
-                            onPressed: () => _openInExplorer(root.path),
-                            icon: const Icon(Icons.folder_open_rounded, size: 14),
-                            label: const Text('Open Folder'),
-                          ),
-                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  SelectableText(
+                    backend.libraryRoot,
+                    style: CompanionTypography.bodySmall.copyWith(
+                      color: ext?.textPrimary,
+                      fontWeight: FontWeight.w500,
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: CompanionSpacing.sm,
+                    children: [
+                      if (Platform.isWindows)
+                        TextButton.icon(
+                          onPressed: () => _openInExplorer(backend.libraryRoot),
+                          icon: const Icon(Icons.folder_open_rounded, size: 14),
+                          label: const Text('Open Folder'),
+                        ),
+                      TextButton.icon(
+                        onPressed: () => _copyPath(backend.libraryRoot),
+                        icon: const Icon(Icons.copy_rounded, size: 14),
+                        label: const Text('Copy Path'),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-              const SizedBox(height: CompanionSpacing.sm),
-            ],
-            const SizedBox(height: CompanionSpacing.sm),
+            ),
+            const SizedBox(height: CompanionSpacing.md),
             Text(
-              'Relocate LIBRARY_ROOT',
+              'Move Models to Another Drive or Folder',
               style: CompanionTypography.bodySmall.copyWith(
                 color: ext?.textPrimary,
                 fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(height: CompanionSpacing.xs),
-            TextField(
-              key: const Key('relocate_library_root_input'),
-              controller: _relocateController,
-              enabled: backend.libraryRelocatable && !_isRelocating,
-              decoration: const InputDecoration(
-                labelText: 'New Absolute Library Path',
-                hintText: r'E:\AI Companion Library',
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    key: const Key('relocate_library_root_input'),
+                    controller: _relocateController,
+                    enabled: backend.libraryRelocatable && !_isRelocating,
+                    decoration: const InputDecoration(
+                      labelText: 'Destination Folder',
+                      hintText: r'Choose a folder on D:\ or another drive...',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: CompanionSpacing.sm),
+                OutlinedButton.icon(
+                  key: const Key('choose_library_folder_button'),
+                  onPressed: (!backend.libraryRelocatable || _isRelocating)
+                      ? null
+                      : _pickLibraryFolder,
+                  icon: const Icon(Icons.folder_open_rounded, size: 16),
+                  label: const Text('Choose Folder...'),
+                ),
+              ],
             ),
             const SizedBox(height: CompanionSpacing.xs),
             Wrap(
@@ -430,7 +361,7 @@ class _SettingsStorageSectionState extends State<SettingsStorageSection> {
                     ),
                     Flexible(
                       child: Text(
-                        'Copy existing models, voices & inbox files to new location',
+                        'Copy existing models, voices & inbox files to the new folder',
                         style: CompanionTypography.caption
                             .copyWith(color: ext?.textSecondary),
                       ),
@@ -449,7 +380,7 @@ class _SettingsStorageSectionState extends State<SettingsStorageSection> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.drive_file_move_rounded, size: 16),
-                  label: const Text('Relocate Library'),
+                  label: const Text('Move Library'),
                 ),
               ],
             ),
@@ -465,7 +396,7 @@ class _SettingsStorageSectionState extends State<SettingsStorageSection> {
             ],
           ] else
             Text(
-              'Connect Host Admin runtime or click Refresh to inspect live volume telemetry across all five storage roots.',
+              'Runtime storage details appear automatically once connected, or expand Advanced Storage Diagnostics below to inspect local paths.',
               style: CompanionTypography.caption
                   .copyWith(color: ext?.textSecondary),
             ),
@@ -479,6 +410,248 @@ class _SettingsStorageSectionState extends State<SettingsStorageSection> {
           ],
         ],
       ),
+    );
+  }
+
+  Widget _buildAdvancedDiagnosticsAccordion(
+    CompanionThemeExtension? ext,
+    bool isDark,
+  ) {
+    return FutureBuilder<List<StorageDiagnosticInfo>>(
+      future: _rootsFuture,
+      builder: (context, snapshot) {
+        final roots = snapshot.data ?? [];
+        final hasHealthIssue = roots.any(
+          (r) =>
+              r.locatorStatus == LocatorStatus.corrupt ||
+              r.locatorStatus == LocatorStatus.validUnavailable,
+        );
+        final isExpanded = _advancedUserToggled
+            ? _advancedExpanded
+            : (_backendRoots == null || hasHealthIssue);
+        final locatorInfo = roots.isNotEmpty ? roots.first : null;
+        final backend = _backendRoots;
+
+        return SoftGlassPanel(
+          padding: const EdgeInsets.all(CompanionSpacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              InkWell(
+                key: const Key('storage_advanced_toggle'),
+                borderRadius: CompanionRadius.borderMd,
+                onTap: () {
+                  setState(() {
+                    _advancedUserToggled = true;
+                    _advancedExpanded = !isExpanded;
+                  });
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.tune_rounded,
+                        size: 18,
+                        color: ext?.textSecondary,
+                      ),
+                      const SizedBox(width: CompanionSpacing.sm),
+                      Expanded(
+                        child: Text(
+                          'Advanced Storage & Developer Diagnostics',
+                          style: CompanionTypography.bodyMedium.copyWith(
+                            color: ext?.textPrimary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      Icon(
+                        isExpanded
+                            ? Icons.expand_less_rounded
+                            : Icons.expand_more_rounded,
+                        color: ext?.textSecondary,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (isExpanded) ...[
+                const SizedBox(height: CompanionSpacing.md),
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: CompanionSpacing.sm,
+                  runSpacing: CompanionSpacing.xs,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.folder_special_outlined,
+                          size: 18,
+                          color: ext?.accent,
+                        ),
+                        const SizedBox(width: CompanionSpacing.sm),
+                        Flexible(
+                          child: Text(
+                            'Storage Diagnostics',
+                            style: CompanionTypography.titleMedium
+                                .copyWith(color: ext?.textPrimary),
+                          ),
+                        ),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.06)
+                            : Colors.black.withValues(alpha: 0.04),
+                        borderRadius: CompanionRadius.borderSm,
+                      ),
+                      child: Text(
+                        'Client Fail-Closed Inspection',
+                        style: CompanionTypography.caption
+                            .copyWith(color: ext?.textSecondary),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: CompanionSpacing.sm),
+                if (locatorInfo != null) ...[
+                  _buildDiagnosticItem(
+                    ext: ext,
+                    label: 'Bootstrap Locator',
+                    path: r'%LOCALAPPDATA%\AI Companion\bootstrap.json',
+                    status: locatorInfo.locatorStatus,
+                    details: locatorInfo.details ?? 'Evaluated',
+                  ),
+                  const SizedBox(height: CompanionSpacing.md),
+                  if (locatorInfo.resolvedPath != null) ...[
+                    _buildDiagnosticItem(
+                      ext: ext,
+                      label: 'Configured Storage Root (DATA)',
+                      path: locatorInfo.resolvedPath,
+                      status: locatorInfo.locatorStatus,
+                      details: locatorInfo.details ?? '',
+                    ),
+                    const SizedBox(height: CompanionSpacing.md),
+                  ],
+                ],
+                for (final root in roots.skip(1)) ...[
+                  _buildDiagnosticItem(
+                    ext: ext,
+                    label: _labelForRootType(root.rootType),
+                    path: root.resolvedPath,
+                    status: root.locatorStatus,
+                    details: root.details ?? '',
+                  ),
+                  const SizedBox(height: CompanionSpacing.md),
+                ],
+                if (backend != null) ...[
+                  Text(
+                    'All Five Canonical Storage Roots (Host Telemetry)',
+                    style: CompanionTypography.bodySmall.copyWith(
+                      color: ext?.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: CompanionSpacing.sm),
+                  for (final root in backend.roots) ...[
+                    NeumorphicSurface(
+                      surfaceType: NeumorphicSurfaceType.recessed,
+                      borderRadius: CompanionRadius.borderMd,
+                      padding: const EdgeInsets.all(CompanionSpacing.md),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  root.label,
+                                  style: CompanionTypography.bodySmall.copyWith(
+                                    color: ext?.textPrimary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: ext?.accent.withValues(alpha: 0.14),
+                                  borderRadius: CompanionRadius.borderSm,
+                                ),
+                                child: Text(
+                                  'Source: ${root.source}',
+                                  style: CompanionTypography.caption.copyWith(
+                                    color: ext?.accent,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          SelectableText(
+                            root.path,
+                            style: CompanionTypography.caption.copyWith(
+                              color: ext?.textSecondary,
+                              fontFamily: 'monospace',
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: CompanionSpacing.sm,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Text(
+                                root.exists
+                                    ? 'On Disk'
+                                    : 'Created Lazily on First Use',
+                                style: CompanionTypography.caption.copyWith(
+                                  color: root.exists
+                                      ? (ext?.success ?? CompanionColors.success)
+                                      : ext?.textMuted,
+                                ),
+                              ),
+                              if (root.freeBytes != null)
+                                Text(
+                                  'Free: ${_formatBytes(root.freeBytes)} / ${_formatBytes(root.totalBytes)}',
+                                  style: CompanionTypography.caption
+                                      .copyWith(color: ext?.textSecondary),
+                                ),
+                              TextButton.icon(
+                                onPressed: () => _copyPath(root.path),
+                                icon: const Icon(Icons.copy_rounded, size: 14),
+                                label: const Text('Copy Path'),
+                              ),
+                              if (Platform.isWindows)
+                                TextButton.icon(
+                                  onPressed: () => _openInExplorer(root.path),
+                                  icon: const Icon(
+                                      Icons.folder_open_rounded,
+                                      size: 14),
+                                  label: const Text('Open Folder'),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: CompanionSpacing.sm),
+                  ],
+                ],
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 

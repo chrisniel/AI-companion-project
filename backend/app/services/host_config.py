@@ -134,6 +134,7 @@ def resolve_effective_model(
 
 
 VALID_HARDWARE_PROFILES = ("eco", "balanced", "maximum")
+VALID_CONTEXT_MODES = ("profile", "16k", "model_max")
 
 
 def get_saved_hardware_profile() -> Optional[str]:
@@ -156,6 +157,28 @@ def save_hardware_profile(profile: str) -> None:
     cfg["hardware_profile"] = normalized
     write_host_config(cfg)
     logger.info(f"Persisted host-level hardware profile: {normalized}")
+
+
+def get_saved_context_mode() -> str:
+    """Read persisted experimental context window override ('profile', '16k', or 'model_max')."""
+    cfg = read_host_config()
+    raw = cfg.get("context_mode")
+    if isinstance(raw, str):
+        normalized = raw.strip().lower()
+        if normalized in VALID_CONTEXT_MODES:
+            return normalized
+    return "profile"
+
+
+def save_context_mode(mode: str) -> None:
+    """Persist host-level experimental context window override in host_config.json."""
+    normalized = (mode or "").strip().lower()
+    if normalized not in VALID_CONTEXT_MODES:
+        raise ValueError(f"Unsupported context mode '{mode}'.")
+    cfg = read_host_config()
+    cfg["context_mode"] = normalized
+    write_host_config(cfg)
+    logger.info(f"Persisted host-level context mode: {normalized}")
 
 
 def get_autostart_preferences() -> Dict[str, bool]:

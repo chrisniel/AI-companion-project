@@ -8,17 +8,17 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 - **Target Files:**
   - `backend/app/core/` (`storage.py`, `config.py`)
   - `backend/app/main.py` (`RuntimeAdmissionASGIMiddleware.NON_DB_PATHS`)
-  - `backend/app/schemas/` (`health.py`, `model_registry.py`)
-  - `backend/app/services/` (`model_registry.py`, `model_import.py` [ADD], `autostart.py` [ADD], `host_config.py`, `llm/manager.py`, `llm/llama_cpp.py`)
+  - `backend/app/schemas/` (`health.py`, `llm.py`, `model_registry.py`)
+  - `backend/app/services/` (`hardware_probe.py` [ADD], `model_registry.py`, `model_import.py` [ADD], `autostart.py` [ADD], `host_config.py`, `llm/manager.py`, `llm/llama_cpp.py`, `llm/mock.py`)
   - `backend/app/api/v1/endpoints/` (`health.py`, `llm.py`)
   - `contracts/openapi/openapi.json`, `scripts/check_dart_openapi_parity.py`, & `scripts/tests/test_check_dart_openapi_parity.py`
   - `frontend/flutter/packages/companion_core/lib/storage/storage_diagnostic.dart`
-  - `frontend/flutter/packages/companion_api/lib/` (`dto/model_registry_dto.dart`, `dto/system_status_dto.dart`, `client/companion_client.dart`)
-  - `frontend/flutter/apps/desktop/windows/runner/` (`main.cpp`, `flutter_window.h`, `flutter_window.cpp`)
-  - `frontend/flutter/apps/desktop/lib/` (`main.dart`, `lifecycle/desktop_lifecycle_coordinator.dart`, `coordinator/desktop_runtime_coordinator.dart`, `screens/settings_screen.dart`, `features/settings/sections/settings_runtime_section.dart`, `features/settings/sections/settings_storage_section.dart`, `features/settings/sections/settings_general_section.dart`)
+  - `frontend/flutter/packages/companion_api/lib/` (`dto/model_status_dto.dart`, `dto/model_registry_dto.dart`, `dto/system_status_dto.dart`, `client/companion_client.dart`)
+  - `frontend/flutter/apps/desktop/windows/runner/` (`CMakeLists.txt`, `main.cpp`, `flutter_window.h`, `flutter_window.cpp`, `windows_shell_channel.h` [ADD], `windows_shell_channel.cpp` [ADD])
+  - `frontend/flutter/apps/desktop/lib/` (`main.dart`, `lifecycle/desktop_lifecycle_coordinator.dart`, `coordinator/desktop_runtime_coordinator.dart`, `controllers/desktop_settings_controller.dart`, `platform/windows_shell_adapter.dart` [ADD], `screens/settings_screen.dart`, `features/settings/sections/settings_runtime_section.dart`, `features/settings/sections/settings_storage_section.dart`, `features/settings/sections/settings_general_section.dart`)
   - `backend/tests/` (`test_bootstrap.py`, `test_storage_engine_lifecycle.py`, `test_model_registry.py`, `test_d6_model_import_and_autostart.py` [ADD])
-  - `frontend/flutter/packages/companion_api/test/` (`m2_models_storage_autostart_dto_test.dart` [ADD])
-  - `frontend/flutter/apps/desktop/test/` (`desktop_m2_models_storage_autostart_test.dart` [ADD], updates to `desktop_settings_revamp_test.dart` / `desktop_lifecycle_test.dart` as needed)
+  - `frontend/flutter/packages/companion_api/test/` (`dto_test.dart`, `m2_models_storage_autostart_dto_test.dart` [ADD])
+  - `frontend/flutter/apps/desktop/test/` (`desktop_m2_models_storage_autostart_test.dart` [ADD], `desktop_settings_revamp_test.dart`, `desktop_lifecycle_test.dart`, `desktop_layout_responsive_test.dart`)
   - Phase 3 docs: canonical specs (`docs/04_Architecture/04_Infrastructure/storage-and-assets.md`, `runtime-and-models.md`, `windows-host-and-notifications.md`), `docs/02_Planning/00_Master/` (`DELIVERY_INDEX.md`, `WBS.md`, `MASTER_CHECKLIST.md`, `SPRINT_ROADMAP.md`), `CHANGELOG.md`, walkthrough (`docs/03_Walkthroughs/walkthrough-m2-models-storage-autostart-e.md`), and archived branch tracker.
 - **Branch:** `feature/m2-models-storage-autostart-e`
 - **Archived Branch Tracker:** [`task-feature-m2-models-storage-autostart-e.md`](../../01_Tracking/archive/task-feature-m2-models-storage-autostart-e.md)
@@ -190,26 +190,33 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
    - **GREEN:** Implement UI updates across `settings_screen.dart`, `settings_runtime_section.dart`, `settings_storage_section.dart`, and `settings_general_section.dart`.
    - **REFACTOR:** Extract clean subwidgets/helpers while preserving design system tokens (`SoftGlassPanel`, `NeumorphicSurface`).
 
-5. **Phase 3 Documentation, Packaging & Draft PR:**
-   - Reconcile canonical specs (`storage-and-assets.md`, `runtime-and-models.md`, `windows-host-and-notifications.md`), `WBS.md`, `MASTER_CHECKLIST.md`, `DELIVERY_INDEX.md`, `SPRINT_ROADMAP.md`, `task.md`, `CHANGELOG.md`, walkthrough (`walkthrough-m2-models-storage-autostart-e.md`), archive branch tracker, push, and open a Draft PR against `develop`.
+5. **Slice 5 (Live Windows QA Remediation, Native Pickers, Real Hardware Recommendations, Experimental >8K Context & Consumer-First Settings UX):**
+   - **Autostart `<UserId>` & Error Envelope Unwrapping:** Include `<UserId>` in `<LogonTrigger>` & `<Principal id="Author">` in `backend/app/services/autostart.py` so standard-user `schtasks /Create` succeeds on Windows without `Access is denied`, and unwrap nested `body['error']['message']`/`['code']` in `CompanionClient._handleErrorResponse()`.
+   - **Real Windows Hardware Probe & PC-Aware Recommendations:** Add `backend/app/services/hardware_probe.py` (`GlobalMemoryStatusEx` + `winreg` 64-bit `qwMemorySize` GPU VRAM) driving dynamic `assess_hardware_suitability()` + `compute_recommended_profiles_for_model()` across factory, installed, and inbox models (accounting for `mmproj`, KV cache overhead, and Windows OS reserve).
+   - **Experimental Context Size > 8K:** Add `context_mode` (`"profile"` | `"16k"` | `"model_max"`) persisted in `host_config.json`, accepted on `PATCH /api/v1/models/profile`, applied cleanly by `LlamaCppProvider`/`MockLLMProvider` (`SERVER_STOPPED` reset on change), and exposed inside a collapsible warning-gated selector in `SettingsRuntimeSection`.
+   - **Multi-Format Inbox Awareness & Move/Copy Transfer:** Report clear format/security warnings in `scan_import_inbox()` (blocking `.pt`/`.pth`/`.pkl`/`.ckpt` pickle formats, explaining `.safetensors`/`.onnx`/`.bin`), and support `transfer_mode` (`"copy"` | `"move"`) on `ModelImportInstallRequest`.
+   - **Zero-Plugin Native Win32 Pickers & Consumer Settings Redesign:** Add `WindowsShellChannel` (`ai_companion/windows_shell`, COM `IFileOpenDialog` `pickFolder` & `pickFiles`) + `DesktopShellAdapter` (auto-creating missing inbox folders before `explorer.exe`), move Library Folder & Add Local Models to the top of Storage & Runtime Settings, sync `SettingsStorageSection` -> `SettingsRuntimeSection` via `DesktopSettingsController.storageRevision` (clearing stale inbox scan results), tuck developer diagnostics inside collapsible Advanced sections, and switch to plain-English copy.
+
+6. **Phase 3 Documentation, Packaging & Draft PR:**
+   - Reconcile canonical specs (`storage-and-assets.md`, `runtime-and-models.md`, `windows-host-and-notifications.md`), `WBS.md`, `MASTER_CHECKLIST.md`, `DELIVERY_INDEX.md`, `SPRINT_ROADMAP.md`, `DECISION_DEBT.md`, `task.md`, `CHANGELOG.md`, walkthrough (`walkthrough-m2-models-storage-autostart-e.md`), archived branch tracker, push updated commits to `origin/feature/m2-models-storage-autostart-e` (PR #47), and stop for Phase 4 Independent Review.
 
 ---
 
 ## 5. Acceptance Criteria & Verification Strategy
 
 ### Automated Repository Checks
-- [x] Backend test suite: `backend\.venv\Scripts\python.exe -m pytest backend\tests backend\tests\test_import_isolation.py scripts\tests\test_python_dependency_lock.py -q -p no:cacheprovider -o log_file=NUL` (`922 passed, 4 subtests passed` in `447.72s`)
+- [x] Backend test suite: `backend\.venv\Scripts\python.exe -m pytest backend\tests backend\tests\test_import_isolation.py scripts\tests\test_python_dependency_lock.py -q -p no:cacheprovider -o log_file=NUL` (`925 passed, 100 warnings, 4 subtests passed` in `481.94s`)
 - [x] Import isolation & dependency lock check: included cleanly above (`test_import_isolation.py` + `test_python_dependency_lock.py`)
 - [x] OpenAPI contract drift check: `backend\.venv\Scripts\python.exe scripts\check_openapi_contract.py --check` (`86 routes`)
-- [x] OpenAPI & Dart contract parity: `backend\.venv\Scripts\python.exe scripts\check_dart_openapi_parity.py --check` (`98/98` schemas, `111` routes) and `backend\.venv\Scripts\python.exe -m unittest scripts\tests\test_check_dart_openapi_parity.py -v` (`8/8 OK`)
-- [x] Dart static analysis & SDK tests: `cd frontend\flutter && dart analyze .` (`0` issues), `cd frontend\flutter\packages\companion_core && dart test` (`24/24`), and `cd frontend\flutter\packages\companion_api && dart test` (`114/114`)
-- [x] Flutter Desktop test suite & Windows MSVC build: `cd frontend\flutter\apps\desktop && flutter test --no-pub --concurrency=1 test` (`433/433` passed) and `flutter build windows --debug --no-pub` (`ai_companion_desktop.exe`, `47.9s`)
+- [x] OpenAPI & Dart contract parity: `backend\.venv\Scripts\python.exe scripts\check_dart_openapi_parity.py --check` (`98/98` schemas, `111/111` routes) and `backend\.venv\Scripts\python.exe -m unittest scripts\tests\test_check_dart_openapi_parity.py -v` (`8/8 OK` in `0.320s`)
+- [x] Dart static analysis & SDK tests: `cd frontend\flutter && dart analyze .` (`0` issues), `cd frontend\flutter\packages\companion_core && dart test` (`24/24`), and `cd frontend\flutter\packages\companion_api && dart test` (`115/115`)
+- [x] Flutter Desktop test suite & Windows MSVC build: `cd frontend\flutter\apps\desktop && flutter test --no-pub --concurrency=1 test` (`435/435` passed) and `flutter build windows --debug --no-pub` (`ai_companion_desktop.exe`, `67.3s`)
 - [x] Diff hygiene: `git diff --check develop` (clean exit 0)
 
 ### Manual & Host-Level Checks (Windows Desktop)
-- [ ] Inspect `Settings -> Storage & Diagnostics`: verify all 5 roots report live backend telemetry + free disk space + **Copy Path** / **Open in Explorer**, and relocate `LIBRARY_ROOT` to a secondary directory verifying `bootstrap.json` updates and `IMPORT_INBOX_DIR` moves cleanly.
-- [ ] Inspect `Settings -> AI Runtime & Models`: drop a test `.gguf` (+ optional `mmproj-*.gguf`) into `IMPORT_INBOX_DIR` (using **Copy Path** or **Open in Explorer**), click **Scan Inbox**, review metadata, VRAM suitability & `recommendedProfiles` badges (and 1-click **Apply Recommended Profile**), click **Install Bundle**, select/load a D6-installed model + switch profile (`Eco` / `Balanced` / `Maximum`) verifying runtime banner parameters & persistence across restart, and remove a user-installed entry.
-- [ ] Inspect `Settings -> General & Lifecycle`: toggle **Launch at Windows Login (Minimized to Tray)** on/off, verify `schtasks /Query /TN AICompanionAutostart /XML` shows standard-user `LeastPrivilege` `LogonTrigger` + `<WorkingDirectory>` + `--minimized-to-tray` without UAC prompts, and launch `ai_companion_desktop.exe --minimized-to-tray` to confirm flash-free hidden startup in system tray (plus restore from tray and intentional `Exit Companion` remaining stopped).
+- [ ] Inspect `Settings -> Storage`: use native **Choose Folder...** (`IFileOpenDialog`) to relocate the Library Folder to a secondary directory, confirm `bootstrap.json` + **Refresh All** + Runtime's `Add Local Models` inbox path update in sync (without stale scan results), and expand **Advanced Storage Diagnostics** to verify all 5 roots + **Copy Path** / **Open Folder**.
+- [ ] Inspect `Settings -> AI Runtime & Models`: verify detected GPU VRAM / host RAM badge matches the PC (`RX 580 8.0 GB` no longer recommends `maximum` for `Qwen3-VL 8B`); use **Add Model Files...** (testing Copy/Move toggle + multi-format safety warning on non-GGUF files and `.gguf` + `mmproj` bundle) or auto-creating **Open Inbox Folder**, click **Scan Inbox**, **Install Bundle**, select/load it, switch `Eco` / `Balanced` / `Maximum`, expand **>8K Experimental** (`16K` / `Model Max`) to confirm warnings + apply, and test Uninstall on a user-installed model.
+- [ ] Inspect `Settings -> General`: toggle **Launch at Windows Login (Minimized to Tray)** on/off confirming clean success (zero HTTP 400 `Access is denied` and readable error messages if mocked/failed), verify `schtasks /Query /TN AICompanionAutostart /XML` shows `<UserId>` inside `<LogonTrigger>` & `<Principal id="Author">` + `LeastPrivilege` + `<WorkingDirectory>` + `--minimized-to-tray` without UAC prompts, and launch `ai_companion_desktop.exe --minimized-to-tray` to confirm flash-free hidden tray startup (plus restore from tray and intentional `Exit Companion` remaining stopped).
 
 ---
 

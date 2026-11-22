@@ -256,11 +256,14 @@ def test_autostart_service_xml_and_escaping(monkeypatch, tmp_path):
         command=r"C:\AI & ML\Companion<1>\ai_companion_desktop.exe",
         arguments="--minimized-to-tray",
         working_directory=r"C:\AI & ML\Companion<1>",
+        user_id=r"CORP&CO\user<1>",
     )
     assert "&amp;" in xml_str and "&lt;" in xml_str
     root = ET.fromstring(xml_str)
     ns = {"t": "http://schemas.microsoft.com/windows/2004/02/mit/task"}
     assert root.find(".//t:LogonTrigger/t:Enabled", ns).text == "true"
+    assert root.find(".//t:LogonTrigger/t:UserId", ns).text == r"CORP&CO\user<1>"
+    assert root.find(".//t:Principal/t:UserId", ns).text == r"CORP&CO\user<1>"
     assert root.find(".//t:Principal/t:RunLevel", ns).text == "LeastPrivilege"
     assert root.find(".//t:Settings/t:DisallowStartIfOnBatteries", ns).text == "false"
     assert root.find(".//t:Settings/t:StopIfGoingOnBatteries", ns).text == "false"
@@ -313,3 +316,109 @@ async def test_autostart_endpoints_auth_and_persistence(client, host_admin_heade
         get_resp = await client.get("/api/v1/system/autostart", headers=host_admin_headers)
         assert get_resp.status_code == 200
         assert get_resp.json()["task_name"] == "AICompanionAutostart"
+
+
+def test_hardware_probe_and_dynamic_recommendations(monkeypatch):
+    from app.services.hardware_probe import clear_hardware_probe_cache, probe_host_hardware
+    from app.services.model_registry import compute_recommended_profiles_for_model
+
+    clear_hardware_probe_cache()
+    monkeypatch.setenv("HOST_DEDICATED_VRAM_GB", "8.0")
+    hw8 = probe_host_hardware(force_refresh=True)
+    assert hw8.dedicated_vram_gb == 8.0
+    assert hw8.detection_source == "env_override"
+
+    gb = 1024 ** 3
+    # Qwen3-VL 2B (~1.4 GB + 0.85 GB mmproj) fits cleanly -> Balanced first
+    rec_2b, _ = compute_recommended_profiles_for_model(
+        file_size_bytes=int(1.4 * gb),
+        companion_size_bytes=int(0.85 * gb),
+        dedicated_vram_gb=8.0,
+    )
+    assert rec_2b[0] == "balanced"
+
+    # Qwen3-VL 8B (~5.0 GB + 0.95 GB mmproj) exceeds usable 8 GB VRAM -> Eco recommended
+    rec_8b_8gb, _ = compute_recommended_profiles_for_model(
+        file_size_bytes=int(5.0 * gb),
+        companion_size_bytes=int(0.95 * gb),
+        dedicated_vram_gb=8.0,
+    )
+    assert rec_8b_8gb == ["eco"]
+
+    # Same 8B on 16 GB GPU fits comfortably -> Balanced/Maximum
+    rec_8b_16gb, _ = compute_recommended_profiles_for_model(
+        file_size_bytes=int(5.0 * gb),
+        companion_size_bytes=int(0.95 * gb),
+        dedicated_vram_gb=16.0,
+    )
+    assert rec_8b_16gb[0] == "balanced"
+    assert "maximum" in rec_8b_16gb
+    clear_hardware_probe_cache()
+
+
+@pytest.mark.asyncio
+async def test_experimental_context_mode_and_profile_reset(monkeypatch, tmp_path):
+    from app.services.host_config import get_saved_context_mode
+    from app.services.llm.llama_cpp import LlamaCppProvider
+
+    monkeypatch.setenv("COMPANION_DATA_ROOT", str(tmp_path / "CtxData"))
+    provider = LlamaCppProvider()
+    assert provider._context_mode == "profile"
+    assert provider._get_profile_params("maximum", model_max_context=32768)["n_ctx"] == 8192
+
+    fake_proc = MagicMock()
+    fake_proc.poll.return_value = None
+    provider._managed_by_core = True
+    provider._server_process = fake_proc
+    provider._server_pid = 9999
+    provider._server_is_active = True
+    provider._active_model_name = "qwen3-vl-2b-instruct"
+    provider._runtime_state = LLMRuntimeState.MODEL_READY
+
+    with patch.object(provider, "_router_unload_model", new_callable=AsyncMock, return_value=True), \
+         patch.object(provider, "_stop_managed_router_locked", return_value=True):
+        ok_16k = await provider.set_profile("balanced", context_mode="16k")
+
+    assert ok_16k is True
+    assert get_saved_context_mode() == "16k"
+    assert provider._runtime_state == LLMRuntimeState.SERVER_STOPPED
+    assert provider._get_profile_params("balanced", model_max_context=32768)["n_ctx"] == 16384
+
+    await provider.set_profile("balanced", context_mode="model_max")
+    assert provider._get_profile_params("balanced", model_max_context=65536)["n_ctx"] == 65536
+    assert await provider.set_profile("balanced", context_mode="invalid_ctx") is False
+
+
+@pytest.mark.asyncio
+async def test_d6_multiformat_warnings_and_transfer_modes(client, host_admin_headers, monkeypatch, tmp_path):
+    monkeypatch.setenv("COMPANION_DATA_ROOT", str(tmp_path / "FmtData"))
+    settings.IMPORT_INBOX_DIR.mkdir(parents=True, exist_ok=True)
+    (settings.IMPORT_INBOX_DIR / "unsafe.pt").write_bytes(b"pickle-stub")
+    (settings.IMPORT_INBOX_DIR / "weights.safetensors").write_bytes(b"st-stub")
+    (settings.IMPORT_INBOX_DIR / "voice.onnx").write_bytes(b"onnx-stub")
+    (settings.IMPORT_INBOX_DIR / "legacy.bin").write_bytes(b"bin-stub")
+
+    valid_bytes = _build_gguf_bytes(arch="qwen3", name="Copy-Keep-Model", size_label="2B", context_length=32768)
+    (settings.IMPORT_INBOX_DIR / "copy-keep.gguf").write_bytes(valid_bytes)
+
+    scan = await client.post("/api/v1/models/import/scan", headers=host_admin_headers)
+    assert scan.status_code == 200
+    warnings = "\n".join(scan.json()["warnings"])
+    assert "Blocked unsafe Python pickle file 'unsafe.pt'" in warnings
+    assert "Ignored SafeTensors file 'weights.safetensors'" in warnings
+    assert "Ignored ONNX file 'voice.onnx'" in warnings
+    assert "Ignored legacy .bin file 'legacy.bin'" in warnings
+
+    with patch.object(llm_manager, "refresh_auto_provider_if_idle", return_value=False):
+        install_copy = await client.post(
+            "/api/v1/models/import/install",
+            json={
+                "relative_path": "copy-keep.gguf",
+                "model_id": "copy-keep-model",
+                "transfer_mode": "copy",
+            },
+            headers=host_admin_headers,
+        )
+    assert install_copy.status_code == 200
+    assert (settings.MODEL_LIBRARY_DIR / "copy-keep-model" / "copy-keep.gguf").is_file()
+    assert (settings.IMPORT_INBOX_DIR / "copy-keep.gguf").is_file()

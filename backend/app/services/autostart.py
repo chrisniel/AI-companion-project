@@ -19,6 +19,17 @@ logger = logging.getLogger("app.services.autostart")
 TASK_NAME = "AICompanionAutostart"
 
 
+def _current_windows_user() -> Optional[str]:
+    """Return DOMAIN\\User (or USERNAME) for standard-user Task Scheduler LogonTrigger."""
+    user = os.environ.get("USERNAME", "").strip()
+    if not user:
+        return None
+    domain = os.environ.get("USERDOMAIN", "").strip()
+    if domain and domain.lower() != user.lower():
+        return f"{domain}\\{user}"
+    return user
+
+
 class AutostartConfigurationError(RuntimeError):
     """Raised when autostart registration fails or desktop binary is unavailable."""
 
@@ -70,11 +81,18 @@ class WindowsAutostartService:
         command: str,
         arguments: str,
         working_directory: str,
+        user_id: Optional[str] = None,
     ) -> str:
         """Render Task Scheduler v1.2 XML using entity-escaped fields and LeastPrivilege."""
         escaped_cmd = xml_escape(command)
         escaped_args = xml_escape(arguments)
         escaped_wd = xml_escape(working_directory)
+        resolved_user = user_id if user_id is not None else _current_windows_user()
+        user_line = (
+            f"      <UserId>{xml_escape(resolved_user)}</UserId>\n"
+            if resolved_user and resolved_user.strip()
+            else ""
+        )
         return (
             '<?xml version="1.0" encoding="UTF-8"?>\n'
             '<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">\n'
@@ -84,10 +102,12 @@ class WindowsAutostartService:
             "  <Triggers>\n"
             "    <LogonTrigger>\n"
             "      <Enabled>true</Enabled>\n"
+            f"{user_line}"
             "    </LogonTrigger>\n"
             "  </Triggers>\n"
             '  <Principals>\n'
             '    <Principal id="Author">\n'
+            f"{user_line}"
             "      <LogonType>InteractiveToken</LogonType>\n"
             "      <RunLevel>LeastPrivilege</RunLevel>\n"
             "    </Principal>\n"
@@ -239,6 +259,7 @@ class WindowsAutostartService:
             command=str(exe_path),
             arguments=args,
             working_directory=str(wd_path),
+            user_id=_current_windows_user(),
         )
 
         tmp_xml: Optional[Path] = None

@@ -256,8 +256,17 @@ class CompanionClient {
     try {
       final dynamic body = jsonDecode(response.body);
       if (body is Map) {
-        code = body['code']?.toString() ?? body['detail']?.toString();
-        message = body['message']?.toString() ?? body['detail']?.toString() ?? message;
+        final nestedError = body['error'];
+        if (nestedError is Map) {
+          code = nestedError['code']?.toString();
+          message = nestedError['message']?.toString() ?? message;
+        }
+        code ??= body['code']?.toString() ?? body['detail']?.toString();
+        if (message == 'HTTP ${response.statusCode}') {
+          message = body['message']?.toString() ??
+              body['detail']?.toString() ??
+              message;
+        }
         details = body;
       }
     } catch (_) {
@@ -426,10 +435,14 @@ class CompanionClient {
   /// Updates the persisted hardware performance profile via PATCH /api/v1/models/profile.
   Future<ModelStatusResponse> updateModelProfile(
     String profile, {
+    String? contextMode,
     Duration timeout = const Duration(seconds: 15),
   }) async {
     final uri = baseUri.replace(path: '${baseUri.path}/api/v1/models/profile');
-    final body = jsonEncode({'profile': profile});
+    final body = jsonEncode({
+      'profile': profile,
+      if (contextMode != null) 'context_mode': contextMode,
+    });
     final response = await _adminRequest('PATCH', uri, body: body, timeout: timeout);
     if (response.statusCode == 200) {
       final dynamic json = jsonDecode(response.body);

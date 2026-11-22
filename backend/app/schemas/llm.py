@@ -113,11 +113,17 @@ class ModelStatusResponse(BaseSchema):
 
     # Hardware profile & configurations: requested vs verified applied
     requested_profile: str = "balanced"
+    requested_context_mode: str = "profile"
     applied_profile: Optional[str] = None
     applied_context_size: Optional[int] = None
     applied_gpu_layers: Optional[int] = None
     requested_mmproj_offload: bool = True           # True if requested profile config offloads mmproj to GPU; False if CPU
     applied_mmproj_offload: Optional[bool] = None   # Verified applied projector device on running router; null when stopped/pending
+
+    # Host GPU / RAM telemetry for PC-aware model recommendations
+    host_gpu_name: Optional[str] = None
+    host_vram_gb: Optional[float] = None
+    host_ram_gb: Optional[float] = None
 
     # Activity & diagnostics
     generation_active: bool = False
@@ -152,4 +158,5 @@ class ModelSelectRequest(BaseSchema):
 class ModelProfileUpdateRequest(BaseSchema):
     """Payload to update hardware profile."""
     profile: Literal["eco", "balanced", "maximum"]
+    context_mode: Optional[Literal["profile", "16k", "model_max"]] = None
 

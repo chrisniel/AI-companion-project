@@ -321,35 +321,57 @@ def assess_hardware_suitability(
     file_size_bytes: int,
     architecture: str = "",
     dedicated_vram_gb: Optional[float] = None,
+    companion_size_bytes: int = 0,
+    context_size: Optional[int] = None,
+    total_ram_gb: Optional[float] = None,
 ):
     """Advisory VRAM/hardware preflight assessment (runtime-and-models.md §2.8)."""
     from app.schemas.model_registry import PreflightAssessmentOut
+    from app.services.hardware_probe import probe_host_hardware
 
-    vram_budget = float(dedicated_vram_gb if dedicated_vram_gb is not None else settings.HOST_DEDICATED_VRAM_GB)
-    size_gb = max(0.0, float(file_size_bytes)) / (1024 ** 3)
-    estimated_vram_gb = round(size_gb * 1.2 + 0.5, 2)
-    ratio = estimated_vram_gb / max(vram_budget, 0.5)
+    hw = None
+    if dedicated_vram_gb is None or total_ram_gb is None:
+        hw = probe_host_hardware()
+    vram_budget = float(
+        dedicated_vram_gb if dedicated_vram_gb is not None else hw.dedicated_vram_gb
+    )
 
-    if ratio <= 0.50:
+    weights_gb = max(0.0, float(file_size_bytes + companion_size_bytes)) / (1024 ** 3)
+    os_reserve_gb = max(1.2, vram_budget * 0.15)
+    usable_vram_gb = max(0.0, vram_budget - os_reserve_gb)
+
+    ctx = context_size or 4096
+    kv_overhead_gb = (
+        0.85
+        if ctx <= 4096
+        else (1.75 if ctx <= 8192 else (3.3 if ctx <= 16384 else 5.0))
+    )
+    estimated_vram_gb = round(weights_gb * 1.15 + kv_overhead_gb, 2)
+    est_max_gb = round(weights_gb * 1.15 + 1.75, 2)
+
+    if estimated_vram_gb <= usable_vram_gb * 0.78:
         status: Literal["recommended", "supported_with_warning", "not_recommended"] = "recommended"
-        profile: Literal["eco", "balanced", "maximum"] = "maximum" if ratio <= 0.35 else "balanced"
+        if est_max_gb <= usable_vram_gb * 0.65 and (vram_budget >= 12.0 or weights_gb <= 1.2):
+            profile: Literal["eco", "balanced", "maximum"] = "maximum"
+        else:
+            profile = "balanced"
         message = (
-            f"Fits comfortably within {vram_budget:.1f} GB dedicated VRAM "
-            f"(~{estimated_vram_gb:.1f} GB estimated)."
+            f"Fits comfortably on {vram_budget:.1f} GB GPU "
+            f"(~{estimated_vram_gb:.1f} GB est. VRAM; ~{usable_vram_gb:.1f} GB usable after OS reserve)."
         )
-    elif ratio <= 0.85:
+    elif estimated_vram_gb <= usable_vram_gb:
         status = "supported_with_warning"
-        profile = "eco" if ratio > 0.70 else "balanced"
+        profile = "balanced"
         message = (
-            f"Uses ~{estimated_vram_gb:.1f} GB of {vram_budget:.1f} GB VRAM; "
-            "close heavy apps or use Eco/Balanced profile."
+            f"Tight fit on {vram_budget:.1f} GB GPU (~{estimated_vram_gb:.1f} GB est. VRAM vs "
+            f"~{usable_vram_gb:.1f} GB usable); Balanced recommended."
         )
     else:
         status = "not_recommended"
         profile = "eco"
         message = (
-            f"Estimated {estimated_vram_gb:.1f} GB exceeds comfortable VRAM headroom ({vram_budget:.1f} GB); "
-            "Eco (CPU offload) recommended."
+            f"Needs ~{estimated_vram_gb:.1f} GB VRAM, exceeding ~{usable_vram_gb:.1f} GB usable on "
+            f"{vram_budget:.1f} GB GPU; Eco (CPU offload) recommended to avoid RAM spillover."
         )
 
     return PreflightAssessmentOut(
@@ -359,6 +381,43 @@ def assess_hardware_suitability(
         recommended_profile=profile,
         message=message,
     )
+
+
+def compute_recommended_profiles_for_model(
+    file_size_bytes: int,
+    companion_size_bytes: int = 0,
+    fallback_vram_gb: float = 0.0,
+    dedicated_vram_gb: Optional[float] = None,
+) -> Tuple[List[str], float]:
+    """Derive PC-aware ordered recommended profiles and est. VRAM for a model entry."""
+    effective_bytes = file_size_bytes
+    if effective_bytes <= 0 and fallback_vram_gb > 0.0:
+        # Approximate GGUF+companion weights from template VRAM hint when weights aren't on disk
+        effective_bytes = int(max(0.5, fallback_vram_gb * 0.85) * (1024 ** 3))
+
+    balanced = assess_hardware_suitability(
+        effective_bytes,
+        dedicated_vram_gb=dedicated_vram_gb,
+        companion_size_bytes=companion_size_bytes,
+        context_size=4096,
+    )
+    maximum = assess_hardware_suitability(
+        effective_bytes,
+        dedicated_vram_gb=dedicated_vram_gb,
+        companion_size_bytes=companion_size_bytes,
+        context_size=8192,
+    )
+
+    ordered: List[str] = []
+    if balanced.status == "not_recommended":
+        ordered = ["eco"]
+    else:
+        ordered.append("balanced")
+        if maximum.status == "recommended":
+            ordered.append("maximum")
+        elif balanced.status == "supported_with_warning":
+            ordered.append("eco")
+    return ordered, balanced.estimated_vram_gb
 
 
 def _get_factory_model_root() -> Path:
@@ -782,6 +841,24 @@ def build_model_list() -> List[ModelRegistryEntry]:
 
     for entry in effective_entries:
         validated_entry = _validate_entry(entry)
+        base_dir = _asset_root_for_entry(validated_entry)
+        primary_bytes = 0
+        companion_bytes = 0
+        if validated_entry.library_state.primary_file_exists:
+            p_path = _resolve_asset_path(base_dir, validated_entry.manifest.primary_file)
+            if p_path is not None and p_path.is_file():
+                primary_bytes = p_path.stat().st_size
+            for comp in validated_entry.manifest.companion_files:
+                c_path = _resolve_asset_path(base_dir, comp.path)
+                if c_path is not None and c_path.is_file():
+                    companion_bytes += c_path.stat().st_size
+        rec_profiles, est_vram = compute_recommended_profiles_for_model(
+            file_size_bytes=primary_bytes,
+            companion_size_bytes=companion_bytes,
+            fallback_vram_gb=validated_entry.hints.estimated_vram_gb,
+        )
+        validated_entry.hints.recommended_profiles = rec_profiles
+        validated_entry.hints.estimated_vram_gb = est_vram
         registered_primary_files.add((validated_entry.registry_source, validated_entry.manifest.primary_file))
         registered.append(validated_entry)
 
@@ -845,9 +922,12 @@ def build_model_list() -> List[ModelRegistryEntry]:
                 available_capabilities=[],
                 capability_provenance=[],
             )
+            rec_unreg, est_unreg = compute_recommended_profiles_for_model(
+                file_size_bytes=path.stat().st_size,
+            )
             hints = ModelRuntimeHints(
-                recommended_profiles=["balanced"],
-                estimated_vram_gb=0.0,
+                recommended_profiles=rec_unreg,
+                estimated_vram_gb=est_unreg,
                 estimated_ram_gb=0.0,
             )
             unregistered.append(

@@ -12,7 +12,10 @@ from app.services.llm.runtime_state import LLMRuntimeState
 from app.services.model_registry import build_model_list
 
 
+from app.services.hardware_probe import probe_host_hardware
 from app.services.host_config import (
+    VALID_CONTEXT_MODES,
+    get_saved_context_mode,
     get_saved_model_selection,
     resolve_effective_model,
     save_model_selection,
@@ -40,6 +43,7 @@ class MockLLMProvider(BaseLLMProvider):
         self._active_model = None
         self._default_mock_model = default_model
         self._active_profile = settings.LLM_PROFILE
+        self._context_mode = get_saved_context_mode()
         self._last_active_at = datetime.now(timezone.utc)
         self._last_error: Optional[str] = None
         self.scripted_turns: List[Any] = []
@@ -77,8 +81,17 @@ class MockLLMProvider(BaseLLMProvider):
         self._active_model = None
         return True
 
-    async def set_profile(self, profile: str) -> bool:
+    async def set_profile(
+        self,
+        profile: str,
+        context_mode: Optional[str] = None,
+    ) -> bool:
         self._active_profile = profile
+        if context_mode is not None:
+            normalized = context_mode.strip().lower()
+            if normalized not in VALID_CONTEXT_MODES:
+                return False
+            self._context_mode = normalized
         return True
 
     def is_loaded(self) -> bool:
@@ -102,9 +115,14 @@ class MockLLMProvider(BaseLLMProvider):
         saved_selection = get_saved_model_selection()
         is_loaded = self._is_loaded
         applied_ctx = context_sizes.get(self._active_profile, 4096)
+        if self._context_mode == "16k":
+            applied_ctx = 16384
+        elif self._context_mode == "model_max":
+            applied_ctx = 32768
         applied_ngl = gpu_layers.get(self._active_profile, settings.LLM_GPU_LAYERS)
         is_eco = self._active_profile == "eco"
         mmproj_flag = not is_eco
+        hw = probe_host_hardware()
 
         if is_loaded:
             runtime_state = LLMRuntimeState.MODEL_READY
@@ -129,11 +147,15 @@ class MockLLMProvider(BaseLLMProvider):
             model_loaded=is_loaded,
             model_awake=is_loaded,
             requested_profile=self._active_profile,
+            requested_context_mode=self._context_mode,
             applied_profile=self._active_profile,
             applied_context_size=applied_ctx,
             applied_gpu_layers=applied_ngl,
             requested_mmproj_offload=mmproj_flag,
             applied_mmproj_offload=mmproj_flag,
+            host_gpu_name=hw.gpu_name,
+            host_vram_gb=hw.dedicated_vram_gb,
+            host_ram_gb=hw.total_ram_gb,
             mmproj_offload=mmproj_flag,
             generation_active=False,
             last_runtime_error=self._last_error,

@@ -162,11 +162,28 @@ def scan_import_inbox() -> ModelImportScanOut:
         dirs[:] = kept_dirs
 
         for fname in sorted(files):
-            if not fname.lower().endswith(".gguf"):
-                continue
             fpath = root_path / fname
             if fpath.is_symlink():
                 warnings.append(f"Skipped symlink file inside inbox: '{fname}'.")
+                continue
+            ext = fpath.suffix.lower()
+            if ext != ".gguf":
+                if ext in {".pt", ".pth", ".pkl", ".ckpt"}:
+                    warnings.append(
+                        f"Blocked unsafe Python pickle file '{fname}' for security (Safe Model Format policy). Use a safe .gguf model instead."
+                    )
+                elif ext == ".safetensors":
+                    warnings.append(
+                        f"Ignored SafeTensors file '{fname}': llama.cpp requires .gguf format. Download a .gguf quantization to run locally."
+                    )
+                elif ext == ".onnx":
+                    warnings.append(
+                        f"Ignored ONNX file '{fname}': ONNX models are used for local voice engines, not llama.cpp chat models. Use .gguf here."
+                    )
+                elif ext == ".bin":
+                    warnings.append(
+                        f"Ignored legacy .bin file '{fname}': llama.cpp b10936 requires .gguf format for chat models."
+                    )
                 continue
             try:
                 rel = fpath.resolve().relative_to(inbox_resolved)
@@ -182,8 +199,6 @@ def scan_import_inbox() -> ModelImportScanOut:
     candidates: List[ModelImportCandidateOut] = []
     for fp, rel, ok, err, meta in primaries:
         size_bytes = fp.stat().st_size
-        size_gb = round(size_bytes / (1024 ** 3), 2)
-        preflight = assess_hardware_suitability(size_bytes, architecture=meta.architecture)
 
         # Pair companion mmproj residing in same directory (prefer valid match)
         paired_mmproj: Optional[Tuple[Path, Path]] = None
@@ -200,6 +215,14 @@ def scan_import_inbox() -> ModelImportScanOut:
                     break
             if paired_mmproj is None:
                 paired_mmproj = same_dir_mmprojs[0]
+
+        companion_bytes = paired_mmproj[0].stat().st_size if paired_mmproj else 0
+        size_gb = round(size_bytes / (1024 ** 3), 2)
+        preflight = assess_hardware_suitability(
+            size_bytes,
+            architecture=meta.architecture,
+            companion_size_bytes=companion_bytes,
+        )
 
         has_vision = paired_mmproj is not None or meta.has_vision_encoder
         caps = ["chat"] if ok else []
@@ -349,20 +372,26 @@ def install_inbox_candidate(request: ModelImportInstallRequest) -> ModelImportIn
             shutil.rmtree(stage_dir, ignore_errors=True)
         raise
 
-    # Consume inbox source files only after verified placement in MODEL_LIBRARY_DIR
-    try:
-        src_parent = primary_src.parent
-        primary_src.unlink(missing_ok=True)
-        if companion_src is not None:
-            companion_src.unlink(missing_ok=True)
-        if src_parent != inbox and src_parent.exists() and not any(src_parent.iterdir()):
-            src_parent.rmdir()
-    except OSError as exc:
-        logger.warning(f"Post-install inbox cleanup warning: {exc}")
+    # Consume inbox source files only when transfer_mode == 'move' (default)
+    if request.transfer_mode == "move":
+        try:
+            src_parent = primary_src.parent
+            primary_src.unlink(missing_ok=True)
+            if companion_src is not None:
+                companion_src.unlink(missing_ok=True)
+            if src_parent != inbox and src_parent.exists() and not any(src_parent.iterdir()):
+                src_parent.rmdir()
+        except OSError as exc:
+            logger.warning(f"Post-install inbox cleanup warning: {exc}")
 
     # Compose Schema v3 entry preserving truthful intrinsic header facts
     size_bytes = (target_dir / primary_src.name).stat().st_size
-    preflight = assess_hardware_suitability(size_bytes, architecture=meta.architecture)
+    comp_bytes = (target_dir / companion_src.name).stat().st_size if companion_src is not None else 0
+    preflight = assess_hardware_suitability(
+        size_bytes,
+        architecture=meta.architecture,
+        companion_size_bytes=comp_bytes,
+    )
     caps = ["chat"]
     modalities = ["text"]
     provenance = [{"capability": "chat", "supported": True, "provenance": "detected"}]

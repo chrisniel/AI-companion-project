@@ -62,6 +62,8 @@ class _SettingsGeneralSectionState extends State<SettingsGeneralSection> {
     );
   }
 
+  String _formatError(Object e) => e is CompanionApiException ? e.message : '$e';
+
   Future<void> _loadAutostartStatus() async {
     if (_isLoadingAutostart) return;
     setState(() {
@@ -79,7 +81,7 @@ class _SettingsGeneralSectionState extends State<SettingsGeneralSection> {
       if (!mounted) return;
       setState(() {
         _isLoadingAutostart = false;
-        _autostartMessage = 'Unable to query autostart status: $e';
+        _autostartMessage = 'Unable to check Windows startup status: ${_formatError(e)}';
       });
     }
   }
@@ -91,7 +93,7 @@ class _SettingsGeneralSectionState extends State<SettingsGeneralSection> {
     if (_isUpdatingAutostart) return;
     setState(() {
       _isUpdatingAutostart = true;
-      _autostartMessage = 'Updating Windows Task Scheduler entry...';
+      _autostartMessage = 'Updating Windows startup setting...';
     });
     try {
       final client = await _resolveClient();
@@ -105,13 +107,15 @@ class _SettingsGeneralSectionState extends State<SettingsGeneralSection> {
       setState(() {
         _autostartStatus = updated;
         _isUpdatingAutostart = false;
-        _autostartMessage = updated.statusDetail;
+        _autostartMessage = updated.enabled
+            ? 'AI Companion will start automatically when you sign in to Windows.'
+            : 'Windows login startup disabled.';
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _isUpdatingAutostart = false;
-        _autostartMessage = 'Failed to update autostart: $e';
+        _autostartMessage = 'Failed to update startup setting: ${_formatError(e)}';
       });
     }
   }
@@ -220,7 +224,7 @@ class _SettingsGeneralSectionState extends State<SettingsGeneralSection> {
                       borderRadius: CompanionRadius.borderSm,
                     ),
                     child: Text(
-                      enabled ? 'ACTIVE (LEAST PRIVILEGE)' : 'PC-HOST-002',
+                      enabled ? 'ACTIVE' : 'OFF',
                       style: CompanionTypography.caption.copyWith(
                         color: enabled
                             ? (ext?.success ?? CompanionColors.success)
@@ -234,7 +238,7 @@ class _SettingsGeneralSectionState extends State<SettingsGeneralSection> {
               ),
               const SizedBox(height: CompanionSpacing.xs),
               Text(
-                'Registers a standard-user Task Scheduler logon trigger (no UAC prompt). Explicit Exit Companion stays stopped.',
+                'Automatically start AI Companion when you sign in to Windows (no admin prompt). Exiting the app keeps it stopped.',
                 style: CompanionTypography.caption.copyWith(
                   color: ext?.textSecondary,
                 ),
@@ -267,7 +271,7 @@ class _SettingsGeneralSectionState extends State<SettingsGeneralSection> {
                 children: [
                   Expanded(
                     child: Text(
-                      'Start Minimized to System Tray (--minimized-to-tray)',
+                      'Start hidden in the system tray',
                       style: CompanionTypography.bodySmall.copyWith(
                         color: ext?.textSecondary,
                       ),

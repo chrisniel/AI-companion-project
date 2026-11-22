@@ -216,5 +216,85 @@ void main() {
 
       expect(seenRequests.length, equals(8));
     });
+
+    test('CompanionClient unwraps nested error envelope and serializes contextMode/transferMode', () async {
+      Map<String, dynamic>? capturedProfileBody;
+      Map<String, dynamic>? capturedInstallBody;
+      final mockHttp = MockClient((request) async {
+        if (request.url.path == '/api/v1/system/autostart') {
+          return http.Response(
+            jsonEncode({
+              'error': {
+                'code': 'HTTP_ERROR',
+                'message': 'Access denied registering Task Scheduler entry.',
+              },
+            }),
+            400,
+          );
+        }
+        if (request.url.path == '/api/v1/models/profile') {
+          capturedProfileBody = jsonDecode(request.body) as Map<String, dynamic>;
+          return http.Response(
+            jsonEncode({
+              'provider': 'llama_cpp',
+              'requested_profile': 'balanced',
+              'requested_context_mode': '16k',
+              'context_size': 16384,
+              'host_gpu_name': 'AMD Radeon RX 580',
+              'host_vram_gb': 8.0,
+              'host_ram_gb': 16.0,
+            }),
+            200,
+          );
+        }
+        if (request.url.path == '/api/v1/models/import/install') {
+          capturedInstallBody = jsonDecode(request.body) as Map<String, dynamic>;
+          return http.Response(
+            jsonEncode({
+              'installed_id': 'qwen',
+              'display_name': 'Qwen',
+              'primary_file': 'qwen/qwen.gguf',
+              'validation_status': 'verified',
+              'sha256_primary': 'deadbeef',
+            }),
+            200,
+          );
+        }
+        return http.Response('Not Found', 404);
+      });
+
+      final client = CompanionClient(
+        baseUrl: 'http://127.0.0.1:8000',
+        httpClient: mockHttp,
+        hostAdminStore: InMemoryCredentialStore('admin-secret-value'),
+      );
+
+      await expectLater(
+        () => client.updateAutostart(const AutostartUpdateRequest(enabled: true)),
+        throwsA(
+          predicate<CompanionApiException>(
+            (e) =>
+                e.statusCode == 400 &&
+                e.code == 'HTTP_ERROR' &&
+                e.message == 'Access denied registering Task Scheduler entry.',
+          ),
+        ),
+      );
+
+      final prof = await client.updateModelProfile('balanced', contextMode: '16k');
+      expect(capturedProfileBody?['context_mode'], equals('16k'));
+      expect(prof.requestedContextMode, equals('16k'));
+      expect(prof.hostGpuName, equals('AMD Radeon RX 580'));
+      expect(prof.hostVramGb, equals(8.0));
+
+      await client.installModelFromInbox(
+        const ModelImportInstallRequest(
+          relativePath: 'qwen.gguf',
+          modelId: 'qwen',
+          transferMode: 'copy',
+        ),
+      );
+      expect(capturedInstallBody?['transfer_mode'], equals('copy'));
+    });
   });
 }

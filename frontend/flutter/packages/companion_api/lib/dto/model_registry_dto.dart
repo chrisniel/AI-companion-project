@@ -306,6 +306,7 @@ class ModelImportInstallRequest {
   final String? variant;
   final String? family;
   final String? license;
+  final String transferMode;
 
   const ModelImportInstallRequest({
     required this.relativePath,
@@ -315,6 +316,7 @@ class ModelImportInstallRequest {
     this.variant,
     this.family,
     this.license,
+    this.transferMode = 'move',
   });
 
   Map<String, dynamic> toJson() => {
@@ -326,6 +328,7 @@ class ModelImportInstallRequest {
         if (variant != null) 'variant': variant,
         if (family != null) 'family': family,
         if (license != null) 'license': license,
+        'transfer_mode': transferMode,
       };
 }
 
