@@ -2,6 +2,7 @@
 
 import logging
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -94,7 +95,7 @@ class WindowsAutostartService:
             else ""
         )
         return (
-            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<?xml version="1.0" encoding="UTF-16"?>\n'
             '<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">\n'
             "  <RegistrationInfo>\n"
             "    <Description>Start AI Companion Desktop at user logon.</Description>\n"
@@ -170,7 +171,13 @@ class WindowsAutostartService:
             if proc.returncode == 0 and proc.stdout.strip():
                 registered = True
                 try:
-                    root = ET.fromstring(proc.stdout)
+                    raw_xml = re.sub(
+                        r'encoding\s*=\s*["\'][^"\']+["\']',
+                        "",
+                        proc.stdout,
+                        count=1,
+                    )
+                    root = ET.fromstring(raw_xml)
                     ns = {"t": "http://schemas.microsoft.com/windows/2004/02/mit/task"}
                     cmd_el = root.find(".//t:Exec/t:Command", ns)
                     args_el = root.find(".//t:Exec/t:Arguments", ns)
@@ -267,7 +274,7 @@ class WindowsAutostartService:
             fd, raw_path = tempfile.mkstemp(prefix="aicompanion_autostart_", suffix=".xml")
             os.close(fd)
             tmp_xml = Path(raw_path)
-            tmp_xml.write_text(xml_content, encoding="utf-8")
+            tmp_xml.write_text(xml_content, encoding="utf-16")
             proc = self._run_schtasks(["/Create", "/TN", TASK_NAME, "/XML", str(tmp_xml), "/F"])
             if proc.returncode != 0:
                 err = (proc.stderr or proc.stdout or "").strip()

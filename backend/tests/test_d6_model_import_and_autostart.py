@@ -23,12 +23,17 @@ def _build_gguf_bytes(
     size_label: str = "2B",
     license_name: str = "apache-2.0",
     chat_template: str = "{% for m in messages %}{{ m.content }}{% endfor %}",
+    embedding_length: int | None = None,
+    projector_type: str | None = None,
+    vision_projection_dim: int | None = None,
+    basename: str | None = None,
+    tags: list[str] | None = None,
 ) -> bytes:
     def _str(s: str) -> bytes:
         b = s.encode("utf-8")
         return struct.pack("<Q", len(b)) + b
 
-    kvs = [
+    kvs: list[tuple[str, int, object]] = [
         ("general.architecture", 8, arch),
         ("general.type", 8, general_type),
         ("general.name", 8, name),
@@ -39,6 +44,17 @@ def _build_gguf_bytes(
         ("general.quantization_version", 4, 2),
         ("tokenizer.chat_template", 8, chat_template),
     ]
+    if basename is not None:
+        kvs.append(("general.basename", 8, basename))
+    if embedding_length is not None:
+        kvs.append((f"{arch}.embedding_length", 4, embedding_length))
+    if projector_type is not None:
+        kvs.append(("clip.projector_type", 8, projector_type))
+    if vision_projection_dim is not None:
+        kvs.append(("clip.vision.projection_dim", 4, vision_projection_dim))
+    if tags is not None:
+        kvs.append(("general.tags", 9, tags))
+
     buf = bytearray(b"GGUF")
     buf.extend(struct.pack("<I", 3))
     buf.extend(struct.pack("<Q", 0))
@@ -47,9 +63,15 @@ def _build_gguf_bytes(
         buf.extend(_str(k))
         buf.extend(struct.pack("<I", vt))
         if vt == 4:
-            buf.extend(struct.pack("<I", int(v)))
+            buf.extend(struct.pack("<I", int(v)))  # type: ignore[arg-type]
         elif vt == 8:
             buf.extend(_str(str(v)))
+        elif vt == 9:
+            items = list(v)  # type: ignore[arg-type]
+            buf.extend(struct.pack("<I", 8))
+            buf.extend(struct.pack("<Q", len(items)))
+            for item in items:
+                buf.extend(_str(str(item)))
     return bytes(buf)
 
 
@@ -258,8 +280,9 @@ def test_autostart_service_xml_and_escaping(monkeypatch, tmp_path):
         working_directory=r"C:\AI & ML\Companion<1>",
         user_id=r"CORP&CO\user<1>",
     )
+    assert 'encoding="UTF-16"' in xml_str
     assert "&amp;" in xml_str and "&lt;" in xml_str
-    root = ET.fromstring(xml_str)
+    root = ET.fromstring(xml_str.encode("utf-16"))
     ns = {"t": "http://schemas.microsoft.com/windows/2004/02/mit/task"}
     assert root.find(".//t:LogonTrigger/t:Enabled", ns).text == "true"
     assert root.find(".//t:LogonTrigger/t:UserId", ns).text == r"CORP&CO\user<1>"
@@ -273,15 +296,29 @@ def test_autostart_service_xml_and_escaping(monkeypatch, tmp_path):
     assert root.find(".//t:Exec/t:Arguments", ns).text == "--minimized-to-tray"
     assert root.find(".//t:Exec/t:WorkingDirectory", ns).text == r"C:\AI & ML\Companion<1>"
 
-    # Verify CREATE_NO_WINDOW gated cleanly & schtasks called on set_enabled
-    with patch("app.services.autostart.subprocess.run") as mock_run, \
+    # Verify CREATE_NO_WINDOW gated cleanly, UTF-16LE BOM written to /XML file & get_status parses UTF-16 XML
+    captured_xml_bytes = {}
+
+    def _fake_schtasks(cmd, **kwargs):
+        if "/Create" in cmd and "/XML" in cmd:
+            xml_path = Path(cmd[cmd.index("/XML") + 1])
+            captured_xml_bytes["bom"] = xml_path.read_bytes()[:2]
+            return MagicMock(returncode=0, stdout="", stderr="")
+        if "/Query" in cmd:
+            return MagicMock(returncode=0, stdout=xml_str, stderr="")
+        return MagicMock(returncode=0, stdout="", stderr="")
+
+    with patch("app.services.autostart.subprocess.run", side_effect=_fake_schtasks) as mock_run, \
          patch.object(sys, "platform", "win32"):
-        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
         res = svc.set_enabled(True, minimized_to_tray=True, executable_path=str(exe_path), working_directory=str(exe_dir))
         assert res.enabled is True
+        assert captured_xml_bytes.get("bom") == b"\xff\xfe"
         assert mock_run.called
         _, kwargs = mock_run.call_args
         assert "creationflags" in kwargs
+        queried = svc.get_status()
+        assert queried.task_registered is True
+        assert queried.minimized_to_tray is True
 
 
 @pytest.mark.asyncio
@@ -422,3 +459,216 @@ async def test_d6_multiformat_warnings_and_transfer_modes(client, host_admin_hea
     assert install_copy.status_code == 200
     assert (settings.MODEL_LIBRARY_DIR / "copy-keep-model" / "copy-keep.gguf").is_file()
     assert (settings.IMPORT_INBOX_DIR / "copy-keep.gguf").is_file()
+
+
+def test_assess_context_options_guardrails():
+    from app.services.model_registry import assess_context_options
+
+    gb = 1024 ** 3
+    # 3.1 GB total weights on 8 GB VRAM GPU with 32K model limit in balanced mode
+    opts = assess_context_options(
+        int(2.3 * gb),
+        companion_size_bytes=int(0.8 * gb),
+        profile="balanced",
+        model_max_context=32768,
+        dedicated_vram_gb=8.0,
+        total_ram_gb=16.0,
+    )
+    by_mode = {o.mode: o for o in opts}
+    assert by_mode["profile"].selectable is True
+    assert by_mode["2k"].status == "good_fit" and by_mode["2k"].selectable is True
+    assert by_mode["4k"].status == "good_fit" and by_mode["4k"].selectable is True
+    assert by_mode["8k"].status == "tight" and by_mode["8k"].selectable is True
+    assert by_mode["16k"].status == "blocked" and by_mode["16k"].selectable is False
+    assert by_mode["32k"].status == "blocked" and by_mode["32k"].selectable is False
+
+    # Model with 8K max blocks 16k with exceeds_model_max=True
+    opts_8k_cap = assess_context_options(
+        int(1.0 * gb),
+        profile="balanced",
+        model_max_context=8192,
+        dedicated_vram_gb=24.0,
+        total_ram_gb=32.0,
+    )
+    cap_map = {o.mode: o for o in opts_8k_cap}
+    assert cap_map["16k"].exceeds_model_max is True
+    assert cap_map["16k"].selectable is False
+
+    # Eco CPU mode checks RAM capacity rather than GPU VRAM
+    opts_eco = assess_context_options(
+        int(6.0 * gb),
+        profile="eco",
+        model_max_context=32768,
+        dedicated_vram_gb=4.0,
+        total_ram_gb=16.0,
+    )
+    eco_map = {o.mode: o for o in opts_eco}
+    assert eco_map["2k"].status == "good_fit" and eco_map["2k"].selectable is True
+    assert eco_map["32k"].status == "tight"
+
+
+@pytest.mark.asyncio
+async def test_multimmproj_header_matching_and_incompatible_rejection(
+    client, host_admin_headers, monkeypatch, tmp_path
+):
+    monkeypatch.setenv("COMPANION_DATA_ROOT", str(tmp_path / "MmprojData"))
+    inbox = settings.IMPORT_INBOX_DIR
+    inbox.mkdir(parents=True, exist_ok=True)
+
+    # Gemma 3 4B (emb=2560, tags=['image-text-to-text']) + Qwen3-VL 4B Instruct + Thinking (emb=2560)
+    # Note both Gemma 3 and Qwen3-VL 4B have dim=2560; projector_type prevents cross-pairing!
+    (inbox / "gemma-3-4b-it-Q4_K_M.gguf").write_bytes(
+        _build_gguf_bytes(
+            arch="gemma3",
+            name="Gemma 3 4b It",
+            basename="gemma-3",
+            embedding_length=2560,
+            tags=["image-text-to-text"],
+        )
+    )
+    (inbox / "mmproj-model-f16.gguf").write_bytes(
+        _build_gguf_bytes(
+            arch="clip",
+            general_type="",
+            name="",
+            projector_type="gemma3",
+            vision_projection_dim=2560,
+        )
+    )
+    (inbox / "Qwen_Qwen3-VL-4B-Instruct-Q4_K_M.gguf").write_bytes(
+        _build_gguf_bytes(
+            arch="qwen3vl",
+            name="Qwen3 VL 4B Instruct",
+            basename="Qwen3-VL",
+            embedding_length=2560,
+            tags=["image-text-to-text"],
+        )
+    )
+    (inbox / "mmproj-Qwen_Qwen3-VL-4B-Instruct-f16.gguf").write_bytes(
+        _build_gguf_bytes(
+            arch="clip",
+            general_type="mmproj",
+            name="Qwen3 VL 4B Instruct",
+            basename="Qwen3-VL",
+            projector_type="qwen3vl_merger",
+            vision_projection_dim=2560,
+        )
+    )
+    (inbox / "mmproj-Qwen_Qwen3-VL-4B-Thinking-f16.gguf").write_bytes(
+        _build_gguf_bytes(
+            arch="clip",
+            general_type="mmproj",
+            name="Qwen3 VL 4B Thinking",
+            basename="Qwen3-VL",
+            projector_type="qwen3vl_merger",
+            vision_projection_dim=2560,
+        )
+    )
+    # Single VL file with no matching projector in its folder or wrong dim
+    sub = inbox / "lonely-gemma4"
+    sub.mkdir()
+    (sub / "gemma-4-E2B-it-Q4_K_M.gguf").write_bytes(
+        _build_gguf_bytes(
+            arch="gemma4",
+            name="Gemma-4-E2B-It",
+            basename="Gemma-4-E2B-It",
+            embedding_length=1536,
+            tags=["unsloth", "any-to-any"],
+        )
+    )
+
+    scan = await client.post("/api/v1/models/import/scan", headers=host_admin_headers)
+    assert scan.status_code == 200
+    body = scan.json()
+    assert len(body["available_mmprojs"]) == 3
+    by_file = {c["primary_filename"]: c for c in body["candidates"]}
+
+    g3 = by_file["gemma-3-4b-it-Q4_K_M.gguf"]
+    assert g3["expects_vision_projector"] is True
+    assert g3["has_vision_projector"] is True
+    assert g3["companion_mmproj_relative_path"] == "mmproj-model-f16.gguf"
+    assert g3["compatible_mmproj_paths"] == ["mmproj-model-f16.gguf"]
+    assert g3["reasoning_mode"] == "unsupported"
+    assert len(g3["context_options"]) >= 6
+
+    q4 = by_file["Qwen_Qwen3-VL-4B-Instruct-Q4_K_M.gguf"]
+    assert q4["companion_mmproj_relative_path"] == "mmproj-Qwen_Qwen3-VL-4B-Instruct-f16.gguf"
+    assert "mmproj-model-f16.gguf" not in q4["compatible_mmproj_paths"]
+    assert "mmproj-Qwen_Qwen3-VL-4B-Thinking-f16.gguf" in q4["compatible_mmproj_paths"]
+
+    g4 = by_file["gemma-4-E2B-it-Q4_K_M.gguf"]
+    assert g4["expects_vision_projector"] is True
+    assert g4["has_vision_projector"] is False
+    assert g4["companion_mmproj_relative_path"] is None
+    assert g4["compatible_mmproj_paths"] == []
+
+    # Installing Gemma 3 with Qwen3-VL mmproj fails closed with HTTP 400
+    bad = await client.post(
+        "/api/v1/models/import/install",
+        json={
+            "relative_path": "gemma-3-4b-it-Q4_K_M.gguf",
+            "companion_relative_path": "mmproj-Qwen_Qwen3-VL-4B-Instruct-f16.gguf",
+            "model_id": "gemma3-mismatched",
+        },
+        headers=host_admin_headers,
+    )
+    assert bad.status_code == 400
+    assert "incompatible" in bad.json()["error"]["message"].lower()
+
+
+@pytest.mark.asyncio
+async def test_reasoning_mode_detection_and_persistence(
+    client, host_admin_headers, monkeypatch, tmp_path
+):
+    monkeypatch.setenv("COMPANION_DATA_ROOT", str(tmp_path / "ReasonData"))
+    inbox = settings.IMPORT_INBOX_DIR
+    inbox.mkdir(parents=True, exist_ok=True)
+
+    (inbox / "gemma4-toggle.gguf").write_bytes(
+        _build_gguf_bytes(
+            arch="gemma4",
+            name="Gemma 4 Toggle",
+            chat_template="{% if enable_thinking %}<|thought|>{% endif %}",
+        )
+    )
+    (inbox / "qwen-think.gguf").write_bytes(
+        _build_gguf_bytes(
+            arch="qwen3vl",
+            name="Qwen3 VL 2B Thinking",
+            chat_template="{% for m in messages %}<think>{{ m.content }}</think>{% endfor %}",
+        )
+    )
+    (inbox / "plain-instruct.gguf").write_bytes(
+        _build_gguf_bytes(
+            arch="llama",
+            name="Plain Instruct",
+            chat_template="{% for m in messages %}{{ m.content }}{% endfor %}",
+        )
+    )
+
+    scan = await client.post("/api/v1/models/import/scan", headers=host_admin_headers)
+    assert scan.status_code == 200
+    by_file = {c["primary_filename"]: c for c in scan.json()["candidates"]}
+    assert by_file["gemma4-toggle.gguf"]["reasoning_mode"] == "toggleable"
+    assert "reasoning" in by_file["gemma4-toggle.gguf"]["detected_capabilities"]
+    assert by_file["qwen-think.gguf"]["reasoning_mode"] == "always_on"
+    assert "reasoning" in by_file["qwen-think.gguf"]["detected_capabilities"]
+    assert by_file["plain-instruct.gguf"]["reasoning_mode"] == "unsupported"
+    assert "reasoning" not in by_file["plain-instruct.gguf"]["detected_capabilities"]
+
+    with patch.object(llm_manager, "refresh_auto_provider_if_idle", return_value=False):
+        install_t = await client.post(
+            "/api/v1/models/import/install",
+            json={"relative_path": "gemma4-toggle.gguf", "model_id": "gemma4-toggle-installed"},
+            headers=host_admin_headers,
+        )
+    assert install_t.status_code == 200
+    reg_json = json.loads(settings.INSTALLED_REGISTRY_PATH.read_text(encoding="utf-8"))
+    installed_raw = next(m for m in reg_json["models"] if m["id"] == "gemma4-toggle-installed")
+    assert installed_raw["reasoning_mode"] == "toggleable"
+    assert "reasoning" in installed_raw["capabilities"]
+
+    from app.services.model_registry import build_model_list
+    installed_entry = next(m for m in build_model_list() if m.manifest.id == "gemma4-toggle-installed")
+    assert installed_entry.manifest.reasoning_mode.value == "toggleable"
+    assert any(c.value == "reasoning" for c in installed_entry.manifest.capabilities)

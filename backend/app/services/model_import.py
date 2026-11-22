@@ -13,19 +13,25 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from app.core.config import settings
 from app.schemas.model_registry import (
+    CapabilityProvenance,
+    InboxMmprojOut,
     ModelDeleteOut,
     ModelImportCandidateOut,
     ModelImportInstallOut,
     ModelImportInstallRequest,
     ModelImportScanOut,
     ModelVariant,
+    ReasoningMode,
 )
 from app.services.host_config import clear_model_selection, get_saved_model_selection
 from app.services.model_registry import (
     GGUFMetadata,
+    assess_context_options,
     assess_hardware_suitability,
     build_model_list,
+    compute_recommended_profiles_for_model,
     find_model_registry_entry,
+    is_vision_capable_primary,
     read_gguf_metadata,
 )
 
@@ -119,6 +125,113 @@ def _is_mmproj_artifact(path: Path, meta: GGUFMetadata) -> bool:
     )
 
 
+def _normalize_family_token(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", (text or "").lower())
+
+
+def _projector_matches_arch(projector_type: str, architecture: str) -> bool:
+    p = _normalize_family_token(projector_type)
+    a = _normalize_family_token(architecture)
+    if not p or not a:
+        return True
+    if a in p or p in a:
+        return True
+    if p.startswith("qwen") and a.startswith("qwen"):
+        return p[:6] == a[:6]
+    if p.startswith("gemma") and a.startswith("gemma"):
+        return p[:6] == a[:6]
+    if p in ("mlp", "ldp", "resampler", "adapter", "projector"):
+        return True
+    return False
+
+
+def _extract_family_signature(text: str) -> Optional[str]:
+    low = (text or "").lower()
+    m = re.search(
+        r"\b(gemma[-_ ]?[0-9]+|qwen[-_ ]?[0-9]+(?:vl)?|llama[-_ ]?[0-9]+|mistral|pixtral|internvl|minicpm)\b",
+        low,
+    )
+    if m:
+        return re.sub(r"[-_ ]+", "", m.group(1))
+    for fam in ("gemma", "qwen", "llama", "mistral", "pixtral", "internvl", "minicpm", "llava"):
+        if fam in low:
+            return fam
+    return None
+
+
+def score_mmproj_compatibility(
+    primary_path: Path,
+    primary_meta: GGUFMetadata,
+    mmproj_path: Path,
+    mmproj_meta: GGUFMetadata,
+) -> Optional[int]:
+    """Return ranked compatibility score for (primary, mmproj), or None if incompatible."""
+    if (
+        primary_meta.embedding_length is not None
+        and mmproj_meta.vision_projection_dim is not None
+        and primary_meta.embedding_length != mmproj_meta.vision_projection_dim
+    ):
+        return None
+
+    if mmproj_meta.projector_type and primary_meta.architecture:
+        if not _projector_matches_arch(mmproj_meta.projector_type, primary_meta.architecture):
+            return None
+
+    p_sig = _extract_family_signature(
+        f"{primary_meta.architecture} {primary_meta.model_name} {primary_meta.basename} {primary_path.stem}"
+    )
+    m_sig = _extract_family_signature(
+        f"{mmproj_meta.projector_type} {mmproj_meta.model_name} {mmproj_meta.basename} {mmproj_path.stem}"
+    )
+    if p_sig and m_sig and p_sig != m_sig and not (p_sig.startswith(m_sig) or m_sig.startswith(p_sig)):
+        return None
+
+    score = 1
+    if mmproj_path.parent.resolve() == primary_path.parent.resolve():
+        score += 50
+
+    p_name_n = _normalize_family_token(primary_meta.model_name)
+    m_name_n = _normalize_family_token(mmproj_meta.model_name)
+    if p_name_n and m_name_n:
+        if p_name_n == m_name_n:
+            score += 100
+        elif p_name_n in m_name_n or m_name_n in p_name_n:
+            score += 60
+
+    p_base_n = _normalize_family_token(primary_meta.basename)
+    m_base_n = _normalize_family_token(mmproj_meta.basename)
+    if p_base_n and m_base_n and (p_base_n == m_base_n or p_base_n in m_base_n or m_base_n in p_base_n):
+        score += 30
+
+    p_variant_txt = f"{primary_meta.model_name} {primary_path.stem}".lower()
+    m_variant_txt = f"{mmproj_meta.model_name} {mmproj_path.stem}".lower()
+    p_think = "think" in p_variant_txt
+    m_think = "think" in m_variant_txt
+    p_inst = "instruct" in p_variant_txt
+    m_inst = "instruct" in m_variant_txt
+    if (p_think and m_think) or (p_inst and m_inst):
+        score += 40
+    elif (p_think and m_inst) or (p_inst and m_think):
+        score -= 25
+
+    p_tokens = {t for t in re.split(r"[^a-z0-9]+", primary_path.stem.lower()) if len(t) >= 2}
+    m_tokens = {
+        t
+        for t in re.split(r"[^a-z0-9]+", mmproj_path.stem.lower())
+        if len(t) >= 2 and t not in ("mmproj", "model", "f16", "f32", "bf16", "q8")
+    }
+    score += min(30, len(p_tokens & m_tokens) * 10)
+
+    if (
+        primary_meta.embedding_length is not None
+        and mmproj_meta.vision_projection_dim is not None
+        and primary_meta.embedding_length == mmproj_meta.vision_projection_dim
+    ):
+        score += 20
+
+    return score if score > 0 else 1
+
+
 def _sha256_file(path: Path) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as f:
@@ -196,25 +309,41 @@ def scan_import_inbox() -> ModelImportScanOut:
     mmprojs = [(fp, rel, ok, meta) for fp, rel, ok, _, meta in valid_files if _is_mmproj_candidate_entry(fp, ok, meta)]
     primaries = [(fp, rel, ok, err, meta) for fp, rel, ok, err, meta in valid_files if not _is_mmproj_candidate_entry(fp, ok, meta)]
 
+    available_mmprojs: List[InboxMmprojOut] = []
+    valid_mmprojs: List[Tuple[Path, Path, GGUFMetadata]] = []
+    for mfp, mrel, mok, mmeta in mmprojs:
+        if mok:
+            valid_mmprojs.append((mfp, mrel, mmeta))
+            available_mmprojs.append(
+                InboxMmprojOut(
+                    relative_path=mrel.as_posix(),
+                    filename=mfp.name,
+                    size_gb=round(mfp.stat().st_size / (1024 ** 3), 2),
+                    model_name=mmeta.model_name,
+                    projector_type=mmeta.projector_type,
+                    vision_projection_dim=mmeta.vision_projection_dim,
+                )
+            )
+        else:
+            warnings.append(f"Skipped invalid/corrupt mmproj file '{mfp.name}'.")
+
     candidates: List[ModelImportCandidateOut] = []
     for fp, rel, ok, err, meta in primaries:
         size_bytes = fp.stat().st_size
 
-        # Pair companion mmproj residing in same directory (prefer valid match)
-        paired_mmproj: Optional[Tuple[Path, Path]] = None
-        same_dir_mmprojs = [
-            (mfp, mrel) for mfp, mrel, mok, _ in mmprojs if mok and mfp.parent.resolve() == fp.parent.resolve()
-        ]
-        if len(same_dir_mmprojs) == 1:
-            paired_mmproj = same_dir_mmprojs[0]
-        elif len(same_dir_mmprojs) > 1:
-            stem_l = fp.stem.lower()
-            for mfp, mrel in same_dir_mmprojs:
-                if stem_l in mfp.stem.lower() or mfp.stem.lower().replace("mmproj-", "") in stem_l:
-                    paired_mmproj = (mfp, mrel)
-                    break
-            if paired_mmproj is None:
-                paired_mmproj = same_dir_mmprojs[0]
+        # Header-verified ranked matching across all valid mmproj files in inbox (no blind [0] fallback)
+        scored_matches: List[Tuple[int, Path, Path]] = []
+        if ok:
+            for mfp, mrel, mmeta in valid_mmprojs:
+                score = score_mmproj_compatibility(fp, meta, mfp, mmeta)
+                if score is not None:
+                    scored_matches.append((score, mfp, mrel))
+        scored_matches.sort(key=lambda item: (-item[0], item[2].as_posix()))
+
+        paired_mmproj: Optional[Tuple[Path, Path]] = (
+            (scored_matches[0][1], scored_matches[0][2]) if scored_matches else None
+        )
+        compatible_mmproj_paths = [mrel.as_posix() for _, _, mrel in scored_matches]
 
         companion_bytes = paired_mmproj[0].stat().st_size if paired_mmproj else 0
         size_gb = round(size_bytes / (1024 ** 3), 2)
@@ -223,12 +352,32 @@ def scan_import_inbox() -> ModelImportScanOut:
             architecture=meta.architecture,
             companion_size_bytes=companion_bytes,
         )
+        context_options = assess_context_options(
+            size_bytes,
+            companion_size_bytes=companion_bytes,
+            profile=preflight.recommended_profile,
+            model_max_context=meta.context_length,
+        )
 
         has_vision = paired_mmproj is not None or meta.has_vision_encoder
+        expects_vision = ok and (has_vision or is_vision_capable_primary(meta))
+        reasoning_mode = meta.reasoning_mode if ok else "unknown"
         caps = ["chat"] if ok else []
         if ok and has_vision:
             caps.append("vision")
+        if ok and reasoning_mode in (ReasoningMode.always_on.value, ReasoningMode.toggleable.value):
+            caps.append("reasoning")
         inferred_variant = _infer_variant(fp.name, meta.model_name)
+
+        if expects_vision and not has_vision:
+            if valid_mmprojs:
+                warnings.append(
+                    f"'{fp.name}' is a vision-capable model, but none of the mmproj files in inbox matched its header dimensions/architecture."
+                )
+            else:
+                warnings.append(
+                    f"'{fp.name}' is a vision-capable model, but no matching mmproj-*.gguf file was found in inbox (vision will be disabled unless attached)."
+                )
 
         candidates.append(
             ModelImportCandidateOut(
@@ -249,9 +398,13 @@ def scan_import_inbox() -> ModelImportScanOut:
                 model_max_context=meta.context_length,
                 has_chat_template=meta.has_chat_template,
                 has_vision_projector=has_vision,
+                expects_vision_projector=expects_vision,
+                reasoning_mode=reasoning_mode,
                 companion_mmproj_relative_path=paired_mmproj[1].as_posix() if paired_mmproj else None,
                 companion_mmproj_filename=paired_mmproj[0].name if paired_mmproj else None,
+                compatible_mmproj_paths=compatible_mmproj_paths,
                 detected_capabilities=caps,
+                context_options=context_options,
                 preflight=preflight,
             )
         )
@@ -259,6 +412,7 @@ def scan_import_inbox() -> ModelImportScanOut:
     return ModelImportScanOut(
         inbox_dir=str(inbox_resolved),
         candidates=candidates,
+        available_mmprojs=available_mmprojs,
         warnings=warnings,
     )
 
@@ -322,6 +476,15 @@ def install_inbox_candidate(request: ModelImportInstallRequest) -> ModelImportIn
         c_ok, c_err, companion_meta = _verify_gguf_header_strict(companion_src)
         if not c_ok:
             raise ModelImportValidationError(f"Invalid companion mmproj GGUF: {c_err}")
+        assert companion_meta is not None
+        if not _is_mmproj_artifact(companion_src, companion_meta):
+            raise ModelImportValidationError(
+                f"Companion file '{companion_src.name}' is not a valid mmproj vision projector GGUF."
+            )
+        if score_mmproj_compatibility(primary_src, meta, companion_src, companion_meta) is None:
+            raise ModelImportValidationError(
+                f"Companion mmproj '{companion_src.name}' is incompatible with '{primary_src.name}' (header architecture or projection dimension mismatch)."
+            )
 
     model_id = _sanitize_model_id(request.model_id)
 
@@ -392,13 +555,31 @@ def install_inbox_candidate(request: ModelImportInstallRequest) -> ModelImportIn
         architecture=meta.architecture,
         companion_size_bytes=comp_bytes,
     )
+    rec_profiles, _ = compute_recommended_profiles_for_model(
+        file_size_bytes=size_bytes,
+        companion_size_bytes=comp_bytes,
+    )
     caps = ["chat"]
     modalities = ["text"]
-    provenance = [{"capability": "chat", "supported": True, "provenance": "detected"}]
+    provenance = [{"capability": "chat", "supported": True, "provenance": CapabilityProvenance.detected.value}]
     if companion_entries or meta.has_vision_encoder:
         caps.append("vision")
         modalities.append("image")
-        provenance.append({"capability": "vision", "supported": True, "provenance": "detected"})
+        provenance.append({"capability": "vision", "supported": True, "provenance": CapabilityProvenance.detected.value})
+
+    detected_reasoning = (
+        meta.reasoning_mode
+        if meta.reasoning_mode
+        in (
+            ReasoningMode.always_on.value,
+            ReasoningMode.toggleable.value,
+            ReasoningMode.unsupported.value,
+        )
+        else ReasoningMode.unknown.value
+    )
+    if detected_reasoning in (ReasoningMode.always_on.value, ReasoningMode.toggleable.value):
+        caps.append("reasoning")
+        provenance.append({"capability": "reasoning", "supported": True, "provenance": CapabilityProvenance.detected.value})
 
     variant_val = (
         request.variant.value
@@ -417,7 +598,7 @@ def install_inbox_candidate(request: ModelImportInstallRequest) -> ModelImportIn
         "variant": variant_val,
         "parameters": meta.size_label,
         "quantization": meta.quantization,
-        "reasoning_mode": "unknown",
+        "reasoning_mode": detected_reasoning,
         "capabilities": caps,
         "input_modalities": modalities,
         "capability_provenance": provenance,
@@ -429,7 +610,7 @@ def install_inbox_candidate(request: ModelImportInstallRequest) -> ModelImportIn
         "source": "local_d6_import",
         "sha256_primary": primary_sha,
         "runtime_model_id": model_id,
-        "recommended_profiles": [preflight.recommended_profile],
+        "recommended_profiles": rec_profiles or [preflight.recommended_profile],
         "estimated_vram_gb": preflight.estimated_vram_gb,
         "estimated_ram_gb": round((size_bytes / (1024 ** 3)) * 0.25 + 0.3, 2),
     }

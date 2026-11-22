@@ -43,8 +43,11 @@ class FakeM2DesktopClient extends CompanionClient {
   bool autostartMinimized = true;
   String? deletedModelId;
   String? installedModelId;
+  String? lastInstalledCompanionRelativePath;
   int scanCalls = 0;
   List<String> scanWarnings = const [];
+  List<ModelImportCandidateOut>? customCandidates;
+  List<InboxMmprojOut> customMmprojs = const [];
 
   FakeM2DesktopClient()
       : super(
@@ -95,15 +98,85 @@ class FakeM2DesktopClient extends CompanionClient {
   }) async {
     final ctx = currentContextMode == '16k'
         ? 16384
-        : (currentContextMode == 'model_max'
+        : (currentContextMode == '32k' || currentContextMode == 'model_max'
             ? 32768
-            : (currentProfile == 'eco' ? 2048 : (currentProfile == 'maximum' ? 8192 : 4096)));
+            : (currentContextMode == '2k'
+                ? 2048
+                : (currentContextMode == '8k'
+                    ? 8192
+                    : (currentProfile == 'eco'
+                        ? 2048
+                        : (currentProfile == 'maximum' ? 8192 : 4096)))));
     return ModelStatusResponse(
       provider: 'llama_cpp',
       runtimeState: 'MODEL_UNLOADED',
       selectedModel: 'qwen3-vl-2b-instruct',
       requestedProfile: currentProfile,
       requestedContextMode: currentContextMode,
+      contextOptions: [
+        ContextOptionAssessmentOut(
+          mode: 'profile',
+          label: 'Auto (${currentProfile.toUpperCase()})',
+          contextTokens: currentProfile == 'eco'
+              ? 2048
+              : (currentProfile == 'maximum' ? 8192 : 4096),
+          estimatedVramGb: 3.1,
+          status: 'good_fit',
+          selectable: true,
+          exceedsModelMax: false,
+          reason: 'Follows active performance mode.',
+        ),
+        const ContextOptionAssessmentOut(
+          mode: '2k',
+          label: '2K (2,048)',
+          contextTokens: 2048,
+          estimatedVramGb: 2.5,
+          status: 'good_fit',
+          selectable: true,
+          exceedsModelMax: false,
+          reason: 'Fits cleanly.',
+        ),
+        const ContextOptionAssessmentOut(
+          mode: '4k',
+          label: '4K (4,096)',
+          contextTokens: 4096,
+          estimatedVramGb: 3.1,
+          status: 'good_fit',
+          selectable: true,
+          exceedsModelMax: false,
+          reason: 'Standard balanced context.',
+        ),
+        const ContextOptionAssessmentOut(
+          mode: '8k',
+          label: '8K (8,192)',
+          contextTokens: 8192,
+          estimatedVramGb: 4.9,
+          status: 'tight',
+          selectable: true,
+          exceedsModelMax: false,
+          reason: 'Tight fit on 8.0 GB GPU.',
+        ),
+        const ContextOptionAssessmentOut(
+          mode: '16k',
+          label: '16K (16,384)',
+          contextTokens: 16384,
+          estimatedVramGb: 7.4,
+          status: 'blocked',
+          selectable: false,
+          exceedsModelMax: false,
+          reason: 'Overflow risk on 8.0 GB GPU.',
+        ),
+        const ContextOptionAssessmentOut(
+          mode: '32k',
+          label: '32K (32,768)',
+          contextTokens: 32768,
+          estimatedVramGb: 10.2,
+          status: 'blocked',
+          selectable: false,
+          exceedsModelMax: true,
+          reason: 'Exceeds model limit (16,384 tokens max).',
+        ),
+      ],
       activeProfile: currentProfile,
       contextSize: ctx,
       gpuLayers: currentProfile == 'eco' ? 0 : (currentProfile == 'maximum' ? 33 : 28),
@@ -137,29 +210,31 @@ class FakeM2DesktopClient extends CompanionClient {
     return ModelImportScanOut(
       inboxDir: inbox,
       warnings: scanWarnings,
-      candidates: const [
-        ModelImportCandidateOut(
-          relativePath: 'llama3-8b/llama3.gguf',
-          primaryFilename: 'llama3.gguf',
-          suggestedModelId: 'llama3-8b-q4',
-          displayName: 'Llama 3 8B Q4',
-          fileSizeBytes: 4200000000,
-          sizeGb: 3.91,
-          artifactValid: true,
-          architecture: 'llama',
-          quantization: 'Q4_K_M',
-          parameters: '8B',
-          modelMaxContext: 8192,
-          detectedCapabilities: ['chat'],
-          preflight: PreflightAssessmentOut(
-            status: 'supported_with_warning',
-            estimatedVramGb: 5.19,
-            hostDedicatedVramGb: 8.0,
-            recommendedProfile: 'eco',
-            message: 'Close heavy GPU apps for best headroom.',
-          ),
-        ),
-      ],
+      availableMmprojs: customMmprojs,
+      candidates: customCandidates ??
+          const [
+            ModelImportCandidateOut(
+              relativePath: 'llama3-8b/llama3.gguf',
+              primaryFilename: 'llama3.gguf',
+              suggestedModelId: 'llama3-8b-q4',
+              displayName: 'Llama 3 8B Q4',
+              fileSizeBytes: 4200000000,
+              sizeGb: 3.91,
+              artifactValid: true,
+              architecture: 'llama',
+              quantization: 'Q4_K_M',
+              parameters: '8B',
+              modelMaxContext: 8192,
+              detectedCapabilities: ['chat'],
+              preflight: PreflightAssessmentOut(
+                status: 'supported_with_warning',
+                estimatedVramGb: 5.19,
+                hostDedicatedVramGb: 8.0,
+                recommendedProfile: 'eco',
+                message: 'Close heavy GPU apps for best headroom.',
+              ),
+            ),
+          ],
     );
   }
 
@@ -169,6 +244,7 @@ class FakeM2DesktopClient extends CompanionClient {
     Duration timeout = const Duration(seconds: 120),
   }) async {
     installedModelId = request.modelId;
+    lastInstalledCompanionRelativePath = request.companionRelativePath;
     return ModelImportInstallOut(
       installedId: request.modelId,
       displayName: request.displayName ?? request.modelId,
@@ -475,13 +551,38 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('Library: '), findsOneWidget);
 
-    // 2. Experimental >8K Context selector + warning
-    await tester.tap(find.byKey(const Key('experimental_context_toggle')));
+    // 2. Unified CTX dropdown blocks unsafe 16k/32k until unsafe toggle is enabled (32k stays blocked > model_max)
+    final ctxDropdown = find.byKey(const Key('ctx_mode_dropdown'));
+    await tester.ensureVisible(ctxDropdown);
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('ctx_mode_16k')));
+    await tester.tap(ctxDropdown);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('ctx_dropdown_item_16k')).last, warnIfMissed: false);
+    await tester.pumpAndSettle();
+    expect(client.currentContextMode, equals('profile'));
+
+    // Dismiss dropdown menu overlay before toggling unsafe CTX
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pumpAndSettle();
+
+    final unsafeToggle = find.byKey(const Key('unsafe_ctx_toggle'));
+    await tester.ensureVisible(unsafeToggle);
+    await tester.tap(unsafeToggle);
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(ctxDropdown);
+    await tester.pumpAndSettle();
+    await tester.tap(ctxDropdown);
+    await tester.pumpAndSettle();
+    // 32k exceeds model_max -> still blocked even with unsafe toggle ON
+    await tester.tap(find.byKey(const Key('ctx_dropdown_item_32k')).last, warnIfMissed: false);
+    await tester.pumpAndSettle();
+    expect(client.currentContextMode, equals('profile'));
+    // 16k only overflows VRAM (not model_max) -> selectable when unlocked!
+    await tester.tap(find.byKey(const Key('ctx_dropdown_item_16k')).last);
     await tester.pumpAndSettle();
     expect(client.currentContextMode, equals('16k'));
-    expect(find.textContaining('Experimental Warning:'), findsOneWidget);
+    expect(find.byKey(const Key('ctx_reset_auto_button')), findsOneWidget);
 
     // 3. Add Model Files (with Move toggle) stages file into inbox & scans
     final moveSwitch = find.byKey(const Key('import_transfer_mode_switch'));
@@ -496,6 +597,178 @@ void main() {
     expect(pickedFile.existsSync(), isFalse);
     expect(File('${client.currentInbox}${Platform.pathSeparator}custom.gguf').existsSync(), isTrue);
     expect(find.textContaining("Blocked unsafe Python pickle file 'unsafe.pt'"), findsOneWidget);
+  });
+
+  testWidgets('Slice 6 Smart CTX Reset, Multi-mmproj Override, Missing mmproj Attach & Reasoning Badges', (tester) async {
+    tester.view.physicalSize = const Size(1440, 1100);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final client = FakeM2DesktopClient()
+      ..currentContextMode = '16k'
+      ..customMmprojs = const [
+        InboxMmprojOut(
+          relativePath: 'qwen-4b/mmproj-instruct.gguf',
+          filename: 'mmproj-instruct.gguf',
+          sizeGb: 0.8,
+          projectorType: 'qwen3vl_merger',
+          visionProjectionDim: 2560,
+        ),
+        InboxMmprojOut(
+          relativePath: 'qwen-4b/mmproj-alt.gguf',
+          filename: 'mmproj-alt.gguf',
+          sizeGb: 0.9,
+          projectorType: 'qwen3vl_merger',
+          visionProjectionDim: 2560,
+        ),
+      ]
+      ..customCandidates = const [
+        ModelImportCandidateOut(
+          relativePath: 'qwen-4b/qwen4b.gguf',
+          primaryFilename: 'qwen4b.gguf',
+          suggestedModelId: 'qwen3-vl-4b-inst',
+          displayName: 'Qwen3 VL 4B Instruct',
+          fileSizeBytes: 2500000000,
+          sizeGb: 2.33,
+          artifactValid: true,
+          architecture: 'qwen3vl',
+          quantization: 'Q4_K_M',
+          hasChatTemplate: true,
+          hasVisionProjector: true,
+          expectsVisionProjector: true,
+          reasoningMode: 'toggleable',
+          companionMmprojRelativePath: 'qwen-4b/mmproj-instruct.gguf',
+          companionMmprojFilename: 'mmproj-instruct.gguf',
+          compatibleMmprojPaths: [
+            'qwen-4b/mmproj-instruct.gguf',
+            'qwen-4b/mmproj-alt.gguf',
+          ],
+          detectedCapabilities: ['chat', 'vision', 'reasoning'],
+          contextOptions: [
+            ContextOptionAssessmentOut(
+              mode: '2k',
+              label: '2K (2,048)',
+              contextTokens: 2048,
+              estimatedVramGb: 3.1,
+              status: 'good_fit',
+              selectable: true,
+              exceedsModelMax: false,
+              reason: 'Fits cleanly.',
+            ),
+            ContextOptionAssessmentOut(
+              mode: '16k',
+              label: '16K (16,384)',
+              contextTokens: 16384,
+              estimatedVramGb: 7.4,
+              status: 'blocked',
+              selectable: false,
+              exceedsModelMax: false,
+              reason: 'Overflow risk.',
+            ),
+          ],
+          preflight: PreflightAssessmentOut(
+            status: 'recommended',
+            estimatedVramGb: 3.5,
+            hostDedicatedVramGb: 8.0,
+            recommendedProfile: 'balanced',
+            message: 'Fits comfortably on 8.0 GB GPU.',
+          ),
+        ),
+        ModelImportCandidateOut(
+          relativePath: 'gemma3/gemma3.gguf',
+          primaryFilename: 'gemma3.gguf',
+          suggestedModelId: 'gemma3-vl-missing',
+          displayName: 'Gemma 3 4B',
+          fileSizeBytes: 2500000000,
+          sizeGb: 2.33,
+          artifactValid: true,
+          architecture: 'gemma3',
+          quantization: 'Q4_K_M',
+          hasChatTemplate: true,
+          hasVisionProjector: false,
+          expectsVisionProjector: true,
+          reasoningMode: 'always_on',
+          companionMmprojRelativePath: null,
+          compatibleMmprojPaths: [],
+          detectedCapabilities: ['chat', 'reasoning'],
+          preflight: PreflightAssessmentOut(
+            status: 'recommended',
+            estimatedVramGb: 3.5,
+            hostDedicatedVramGb: 8.0,
+            recommendedProfile: 'balanced',
+            message: 'Fits comfortably on 8.0 GB GPU.',
+          ),
+        ),
+      ];
+
+    final fakeShell = _FakeDesktopShellAdapter(filesResult: const []);
+    final controller = DesktopSettingsController(
+      initialDestination: DesktopNavDestination.settings,
+      initialSettingsSection: SettingsSectionId.runtime,
+      diagnosticReader: WindowsStorageDiagnosticReader(
+        localAppDataOverride: r'C:\Mock\Local',
+        fileExistsChecker: (_) => false,
+        directoryExistsChecker: (_) => false,
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: CompanionTheme.dark(),
+        home: Scaffold(
+          body: SettingsScreen(
+            controller: controller,
+            client: client,
+            shellAdapter: fakeShell,
+            clientSettings: _InMemoryDesktopClientSettings(),
+            credentialStore: InMemoryCredentialStore('test-token'),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 1. Saved unsafe 16k shows Reset to Auto banner and resets cleanly back to 'profile'
+    final resetBtn = find.byKey(const Key('ctx_reset_auto_button'));
+    expect(resetBtn, findsOneWidget);
+    await tester.ensureVisible(resetBtn);
+    await tester.pumpAndSettle();
+    await tester.tap(resetBtn);
+    await tester.pumpAndSettle();
+    expect(client.currentContextMode, equals('profile'));
+
+    // 2. Scan inbox -> shows Reasoning badges, CTX Fit strip, mmproj override & missing Attach button
+    final scanBtn = find.byKey(const Key('d6_scan_inbox_button'));
+    await tester.ensureVisible(scanBtn);
+    await tester.pumpAndSettle();
+    await tester.tap(scanBtn);
+    await tester.pumpAndSettle();
+    expect(find.text('Reasoning (Toggleable)'), findsOneWidget);
+    expect(find.text('Reasoning (Always On)'), findsOneWidget);
+    expect(find.textContaining('CTX Fit — 2K: Good · 16K: Overflow'), findsOneWidget);
+    expect(find.text('Vision model — mmproj missing'), findsOneWidget);
+    final attachBtn = find.byKey(const Key('attach_mmproj_gemma3-vl-missing'));
+    expect(attachBtn, findsOneWidget);
+    await tester.ensureVisible(attachBtn);
+    await tester.pumpAndSettle();
+    await tester.tap(attachBtn);
+    await tester.pumpAndSettle();
+    expect(fakeShell.pickFilesCalls, equals(1));
+
+    // Switch Qwen3 mmproj dropdown to mmproj-alt.gguf before installing
+    final mmprojDropdown = find.byKey(const Key('candidate_mmproj_dropdown_qwen3-vl-4b-inst'));
+    await tester.ensureVisible(mmprojDropdown);
+    await tester.tap(mmprojDropdown);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('mmproj-alt.gguf').last);
+    await tester.pumpAndSettle();
+
+    final installBtn = find.byKey(const Key('d6_install_candidate_qwen3-vl-4b-inst'));
+    await tester.ensureVisible(installBtn);
+    await tester.tap(installBtn);
+    await tester.pumpAndSettle();
+    expect(client.installedModelId, equals('qwen3-vl-4b-inst'));
+    expect(client.lastInstalledCompanionRelativePath, equals('qwen-4b/mmproj-alt.gguf'));
   });
 
   test('WindowsShellAdapter stageFilesToInbox copies and moves real files asynchronously', () async {

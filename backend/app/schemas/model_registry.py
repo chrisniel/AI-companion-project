@@ -142,6 +142,28 @@ class ModelRegistryEntry(BaseSchema):
     registry_source: Literal["factory", "installed"] = "factory"
 
 
+class ContextOptionAssessmentOut(BaseSchema):
+    """Availability and resource guardrail assessment for a selectable context window."""
+    mode: Literal["profile", "2k", "4k", "8k", "16k", "32k", "model_max"]
+    label: str
+    context_tokens: int
+    estimated_vram_gb: float
+    status: Literal["good_fit", "tight", "blocked"]
+    selectable: bool
+    exceeds_model_max: bool = False
+    reason: str
+
+
+class InboxMmprojOut(BaseSchema):
+    """Valid mmproj vision projector GGUF discovered inside IMPORT_INBOX_DIR."""
+    relative_path: str
+    filename: str
+    size_gb: float
+    model_name: str = ""
+    projector_type: str = ""
+    vision_projection_dim: Optional[int] = None
+
+
 class PreflightAssessmentOut(BaseSchema):
     """Advisory hardware/VRAM suitability preflight assessment (runtime-and-models §2.8)."""
     status: Literal["recommended", "supported_with_warning", "not_recommended"]
@@ -170,9 +192,13 @@ class ModelImportCandidateOut(BaseSchema):
     model_max_context: Optional[int] = None
     has_chat_template: bool = False
     has_vision_projector: bool = False
+    expects_vision_projector: bool = False
+    reasoning_mode: str = "unknown"
     companion_mmproj_relative_path: Optional[str] = None
     companion_mmproj_filename: Optional[str] = None
+    compatible_mmproj_paths: List[str] = Field(default_factory=list)
     detected_capabilities: List[str] = Field(default_factory=list)
+    context_options: List[ContextOptionAssessmentOut] = Field(default_factory=list)
     preflight: PreflightAssessmentOut
 
 
@@ -180,6 +206,7 @@ class ModelImportScanOut(BaseSchema):
     """Result of manual D6 scan over IMPORT_INBOX_DIR."""
     inbox_dir: str
     candidates: List[ModelImportCandidateOut] = Field(default_factory=list)
+    available_mmprojs: List[InboxMmprojOut] = Field(default_factory=list)
     warnings: List[str] = Field(default_factory=list)
 
 

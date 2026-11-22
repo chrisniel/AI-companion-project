@@ -123,6 +123,94 @@ class ModelRegistryEntry {
   String toString() => 'ModelRegistryEntry(id: $id, display: $displayName, status: $validationStatus, source: $registrySource)';
 }
 
+/// Availability and hardware guardrail assessment for a selectable context window.
+@immutable
+class ContextOptionAssessmentOut {
+  final String mode;
+  final String label;
+  final int contextTokens;
+  final double estimatedVramGb;
+  final String status;
+  final bool selectable;
+  final bool exceedsModelMax;
+  final String reason;
+
+  const ContextOptionAssessmentOut({
+    required this.mode,
+    required this.label,
+    required this.contextTokens,
+    required this.estimatedVramGb,
+    required this.status,
+    required this.selectable,
+    this.exceedsModelMax = false,
+    required this.reason,
+  });
+
+  factory ContextOptionAssessmentOut.fromJson(Map<String, dynamic> json) {
+    return ContextOptionAssessmentOut(
+      mode: json['mode'] as String? ?? 'profile',
+      label: json['label'] as String? ?? '',
+      contextTokens: json['context_tokens'] as int? ?? 4096,
+      estimatedVramGb: (json['estimated_vram_gb'] as num?)?.toDouble() ?? 0.0,
+      status: json['status'] as String? ?? 'good_fit',
+      selectable: json['selectable'] as bool? ?? true,
+      exceedsModelMax: json['exceeds_model_max'] as bool? ?? false,
+      reason: json['reason'] as String? ?? '',
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'mode': mode,
+        'label': label,
+        'context_tokens': contextTokens,
+        'estimated_vram_gb': estimatedVramGb,
+        'status': status,
+        'selectable': selectable,
+        'exceeds_model_max': exceedsModelMax,
+        'reason': reason,
+      };
+}
+
+/// Valid mmproj vision projector GGUF discovered inside IMPORT_INBOX_DIR.
+@immutable
+class InboxMmprojOut {
+  final String relativePath;
+  final String filename;
+  final double sizeGb;
+  final String modelName;
+  final String projectorType;
+  final int? visionProjectionDim;
+
+  const InboxMmprojOut({
+    required this.relativePath,
+    required this.filename,
+    required this.sizeGb,
+    this.modelName = '',
+    this.projectorType = '',
+    this.visionProjectionDim,
+  });
+
+  factory InboxMmprojOut.fromJson(Map<String, dynamic> json) {
+    return InboxMmprojOut(
+      relativePath: json['relative_path'] as String? ?? '',
+      filename: json['filename'] as String? ?? '',
+      sizeGb: (json['size_gb'] as num?)?.toDouble() ?? 0.0,
+      modelName: json['model_name'] as String? ?? '',
+      projectorType: json['projector_type'] as String? ?? '',
+      visionProjectionDim: json['vision_projection_dim'] as int?,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'relative_path': relativePath,
+        'filename': filename,
+        'size_gb': sizeGb,
+        'model_name': modelName,
+        'projector_type': projectorType,
+        if (visionProjectionDim != null) 'vision_projection_dim': visionProjectionDim,
+      };
+}
+
 /// Advisory hardware suitability preflight outcome for a GGUF artifact.
 @immutable
 class PreflightAssessmentOut {
@@ -179,9 +267,13 @@ class ModelImportCandidateOut {
   final int? modelMaxContext;
   final bool hasChatTemplate;
   final bool hasVisionProjector;
+  final bool expectsVisionProjector;
+  final String reasoningMode;
   final String? companionMmprojRelativePath;
   final String? companionMmprojFilename;
+  final List<String> compatibleMmprojPaths;
   final List<String> detectedCapabilities;
+  final List<ContextOptionAssessmentOut> contextOptions;
   final PreflightAssessmentOut preflight;
 
   const ModelImportCandidateOut({
@@ -202,14 +294,20 @@ class ModelImportCandidateOut {
     this.modelMaxContext,
     this.hasChatTemplate = false,
     this.hasVisionProjector = false,
+    this.expectsVisionProjector = false,
+    this.reasoningMode = 'unknown',
     this.companionMmprojRelativePath,
     this.companionMmprojFilename,
+    this.compatibleMmprojPaths = const [],
     this.detectedCapabilities = const [],
+    this.contextOptions = const [],
     required this.preflight,
   });
 
   factory ModelImportCandidateOut.fromJson(Map<String, dynamic> json) {
     final rawCaps = json['detected_capabilities'] as List<dynamic>? ?? const [];
+    final rawCompatMmprojs = json['compatible_mmproj_paths'] as List<dynamic>? ?? const [];
+    final rawCtxOptions = json['context_options'] as List<dynamic>? ?? const [];
     return ModelImportCandidateOut(
       relativePath: json['relative_path'] as String? ?? '',
       primaryFilename: json['primary_filename'] as String? ?? '',
@@ -228,9 +326,15 @@ class ModelImportCandidateOut {
       modelMaxContext: json['model_max_context'] as int?,
       hasChatTemplate: json['has_chat_template'] as bool? ?? false,
       hasVisionProjector: json['has_vision_projector'] as bool? ?? false,
+      expectsVisionProjector: json['expects_vision_projector'] as bool? ?? false,
+      reasoningMode: json['reasoning_mode'] as String? ?? 'unknown',
       companionMmprojRelativePath: json['companion_mmproj_relative_path'] as String?,
       companionMmprojFilename: json['companion_mmproj_filename'] as String?,
+      compatibleMmprojPaths: rawCompatMmprojs.map((e) => e.toString()).toList(),
       detectedCapabilities: rawCaps.map((e) => e.toString()).toList(),
+      contextOptions: rawCtxOptions
+          .map((e) => ContextOptionAssessmentOut.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList(),
       preflight: PreflightAssessmentOut.fromJson(
         Map<String, dynamic>.from(json['preflight'] as Map? ?? const {}),
       ),
@@ -255,11 +359,15 @@ class ModelImportCandidateOut {
         if (modelMaxContext != null) 'model_max_context': modelMaxContext,
         'has_chat_template': hasChatTemplate,
         'has_vision_projector': hasVisionProjector,
+        'expects_vision_projector': expectsVisionProjector,
+        'reasoning_mode': reasoningMode,
         if (companionMmprojRelativePath != null)
           'companion_mmproj_relative_path': companionMmprojRelativePath,
         if (companionMmprojFilename != null)
           'companion_mmproj_filename': companionMmprojFilename,
+        'compatible_mmproj_paths': compatibleMmprojPaths,
         'detected_capabilities': detectedCapabilities,
+        'context_options': contextOptions.map((c) => c.toJson()).toList(),
         'preflight': preflight.toJson(),
       };
 }
@@ -269,21 +377,27 @@ class ModelImportCandidateOut {
 class ModelImportScanOut {
   final String inboxDir;
   final List<ModelImportCandidateOut> candidates;
+  final List<InboxMmprojOut> availableMmprojs;
   final List<String> warnings;
 
   const ModelImportScanOut({
     required this.inboxDir,
     this.candidates = const [],
+    this.availableMmprojs = const [],
     this.warnings = const [],
   });
 
   factory ModelImportScanOut.fromJson(Map<String, dynamic> json) {
     final rawCands = json['candidates'] as List<dynamic>? ?? const [];
+    final rawMmprojs = json['available_mmprojs'] as List<dynamic>? ?? const [];
     final rawWarnings = json['warnings'] as List<dynamic>? ?? const [];
     return ModelImportScanOut(
       inboxDir: json['inbox_dir'] as String? ?? '',
       candidates: rawCands
           .map((e) => ModelImportCandidateOut.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList(),
+      availableMmprojs: rawMmprojs
+          .map((e) => InboxMmprojOut.fromJson(Map<String, dynamic>.from(e as Map)))
           .toList(),
       warnings: rawWarnings.map((e) => e.toString()).toList(),
     );
@@ -292,6 +406,7 @@ class ModelImportScanOut {
   Map<String, dynamic> toJson() => {
         'inbox_dir': inboxDir,
         'candidates': candidates.map((c) => c.toJson()).toList(),
+        'available_mmprojs': availableMmprojs.map((m) => m.toJson()).toList(),
         'warnings': warnings,
       };
 }

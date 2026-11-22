@@ -134,7 +134,7 @@ def resolve_effective_model(
 
 
 VALID_HARDWARE_PROFILES = ("eco", "balanced", "maximum")
-VALID_CONTEXT_MODES = ("profile", "16k", "model_max")
+VALID_CONTEXT_MODES = ("profile", "2k", "4k", "8k", "16k", "32k", "model_max")
 
 
 def get_saved_hardware_profile() -> Optional[str]:

@@ -78,6 +78,7 @@ void main() {
         'model_awake': true,
         'requested_profile': 'balanced',
         'requested_context_mode': 'profile',
+        'context_options': const <dynamic>[],
         'requested_mmproj_offload': true,
         'generation_active': false,
         'mmproj_offload': true,

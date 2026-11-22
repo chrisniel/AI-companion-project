@@ -38,8 +38,10 @@ from app.services.llm.base import (
 )
 from app.services.llm.runtime_state import LLMRuntimeState
 from app.services.model_registry import (
+    assess_context_options_for_entry,
     build_model_list,
     find_model_registry_entry,
+    resolve_context_size_for_mode,
     resolve_runtime_model_id,
 )
 
@@ -542,11 +544,11 @@ class LlamaCppProvider(BaseLLMProvider):
             }
 
         mode = (context_mode if context_mode is not None else getattr(self, "_context_mode", "profile")) or "profile"
-        safe_max = model_max_context if isinstance(model_max_context, int) and not isinstance(model_max_context, bool) else None
-        if mode == "16k":
-            params["n_ctx"] = min(16384, safe_max) if (safe_max and safe_max >= 4096) else 16384
-        elif mode == "model_max":
-            params["n_ctx"] = min(max(safe_max or 32768, 4096), 131072)
+        params["n_ctx"] = resolve_context_size_for_mode(
+            params["n_ctx"],
+            mode,
+            model_max_context=model_max_context,
+        )
         return params
 
     def _check_port_listening(self, host: str, port: int) -> bool:
@@ -1264,6 +1266,12 @@ class LlamaCppProvider(BaseLLMProvider):
 
 
         hw = probe_host_hardware()
+        context_options = assess_context_options_for_entry(
+            selected_entry,
+            profile=self._active_profile,
+            dedicated_vram_gb=hw.dedicated_vram_gb,
+            total_ram_gb=hw.total_ram_gb,
+        )
 
         return ModelStatusResponse(
             provider=self.provider_name,
@@ -1278,6 +1286,7 @@ class LlamaCppProvider(BaseLLMProvider):
             model_awake=model_awake,
             requested_profile=self._active_profile,
             requested_context_mode=getattr(self, "_context_mode", "profile"),
+            context_options=context_options,
             applied_profile=effective_applied_profile,
             applied_context_size=effective_applied_ctx,
             applied_gpu_layers=effective_applied_ngl,

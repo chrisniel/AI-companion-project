@@ -3,6 +3,7 @@
 from typing import Any, Dict, List, Literal, Optional, Union
 from pydantic import Field
 from app.schemas.common import BaseSchema
+from app.schemas.model_registry import ContextOptionAssessmentOut
 from app.schemas.multimodal import (
     ContentBlock,
     ImageAttachmentRef,
@@ -114,6 +115,7 @@ class ModelStatusResponse(BaseSchema):
     # Hardware profile & configurations: requested vs verified applied
     requested_profile: str = "balanced"
     requested_context_mode: str = "profile"
+    context_options: List[ContextOptionAssessmentOut] = Field(default_factory=list)
     applied_profile: Optional[str] = None
     applied_context_size: Optional[int] = None
     applied_gpu_layers: Optional[int] = None
@@ -158,5 +160,7 @@ class ModelSelectRequest(BaseSchema):
 class ModelProfileUpdateRequest(BaseSchema):
     """Payload to update hardware profile."""
     profile: Literal["eco", "balanced", "maximum"]
-    context_mode: Optional[Literal["profile", "16k", "model_max"]] = None
+    context_mode: Optional[
+        Literal["profile", "2k", "4k", "8k", "16k", "32k", "model_max"]
+    ] = None
 

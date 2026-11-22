@@ -111,7 +111,66 @@ class GGUFMetadata:
     license_name: str = ""
     has_chat_template: bool = False
     has_vision_encoder: bool = False
+    has_audio_encoder: bool = False
+    embedding_length: Optional[int] = None
+    projector_type: str = ""
+    vision_projection_dim: Optional[int] = None
+    basename: str = ""
+    tags: List[str] = field(default_factory=list)
+    reasoning_mode: str = "unknown"
     raw_metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+_VISION_PRIMARY_ARCHITECTURES = {
+    "qwen3vl",
+    "qwen2vl",
+    "qwen25vl",
+    "gemma3",
+    "gemma4",
+    "llava",
+    "internvl",
+    "minicpmv",
+    "pixtral",
+    "mllama",
+    "mistral3",
+}
+_VISION_TAGS = {
+    "image-text-to-text",
+    "any-to-any",
+    "vision",
+    "multimodal",
+    "visual-question-answering",
+}
+
+
+def _infer_reasoning_from_chat_template(template: str) -> str:
+    """Detect reasoning mode from bounded tokenizer.chat_template without keeping raw text."""
+    t = (template or "").lower()
+    if not t:
+        return "unknown"
+    if "enable_thinking" in t:
+        return ReasoningMode.toggleable.value
+    if any(m in t for m in ("<think>", "<|thought|>", "<thought>", "<|begin_of_thought|>")):
+        return ReasoningMode.always_on.value
+    return ReasoningMode.unsupported.value
+
+
+def _infer_reasoning_from_name(name_text: str) -> str:
+    """Fallback reasoning heuristic for template-less GGUF files."""
+    low = (name_text or "").lower()
+    if any(tok in low for tok in ("thinking", "deepseek-r1", "-r1-", "-r1", "qwq", "reasoner")):
+        return ReasoningMode.always_on.value
+    return "unknown"
+
+
+def is_vision_capable_primary(meta: GGUFMetadata) -> bool:
+    """Return True if primary GGUF metadata or architecture indicates multimodal vision support."""
+    if meta.has_vision_encoder:
+        return True
+    if any(tag in _VISION_TAGS for tag in meta.tags):
+        return True
+    arch = (meta.architecture or "").strip().lower()
+    return arch in _VISION_PRIMARY_ARCHITECTURES
 
 
 _STRUCT_U64 = struct.Struct("<Q")
@@ -229,7 +288,11 @@ def read_gguf_metadata(path: Path) -> GGUFMetadata:
         cache_key = (str(path), file_size, st.st_mtime_ns) if file_size >= 65536 else None
         if cache_key is not None and cache_key in _GGUF_METADATA_CACHE:
             cached = _GGUF_METADATA_CACHE[cache_key]
-            return replace(cached, raw_metadata=dict(cached.raw_metadata))
+            return replace(
+                cached,
+                tags=list(cached.tags),
+                raw_metadata=dict(cached.raw_metadata),
+            )
         with open(path, "rb", buffering=256 * 1024) as f:
             magic = f.read(4)
             if magic != b"GGUF":
@@ -261,9 +324,17 @@ def read_gguf_metadata(path: Path) -> GGUFMetadata:
                         raise ValueError(
                             f"tokenizer.chat_template length {slen} outside bounds [0, {MAX_CHAT_TEMPLATE_LENGTH}]"
                         )
-                    _seek_forward_bounded(f, slen, file_size)
+                    pos = f.tell()
+                    if pos + slen > file_size:
+                        raise EOFError(
+                            f"GGUF chat_template offset {pos + slen} exceeds file size {file_size}"
+                        )
                     if slen > 0:
                         result.has_chat_template = True
+                        tmpl_bytes = _read_exact(f, slen)
+                        result.reasoning_mode = _infer_reasoning_from_chat_template(
+                            tmpl_bytes.decode("utf-8", errors="replace")
+                        )
                     continue
                 val = _read_gguf_value(f, val_type)
                 raw_metadata[key] = val
@@ -276,8 +347,12 @@ def read_gguf_metadata(path: Path) -> GGUFMetadata:
                 result.architecture = arch
                 ctx_key = f"{arch}.context_length"
                 ctx_val = raw_metadata.get(ctx_key)
-                if isinstance(ctx_val, int) and ctx_val > 0:
+                if isinstance(ctx_val, int) and not isinstance(ctx_val, bool) and ctx_val > 0:
                     result.context_length = ctx_val
+                emb_key = f"{arch}.embedding_length"
+                emb_val = raw_metadata.get(emb_key)
+                if isinstance(emb_val, int) and not isinstance(emb_val, bool) and emb_val > 0:
+                    result.embedding_length = emb_val
 
             gtype = raw_metadata.get("general.type")
             if isinstance(gtype, str):
@@ -285,15 +360,34 @@ def read_gguf_metadata(path: Path) -> GGUFMetadata:
             gname = raw_metadata.get("general.name")
             if isinstance(gname, str):
                 result.model_name = gname
+            gbase = raw_metadata.get("general.basename")
+            if isinstance(gbase, str):
+                result.basename = gbase
             slabel = raw_metadata.get("general.size_label")
             if isinstance(slabel, str):
                 result.size_label = slabel
             glic = raw_metadata.get("general.license")
             if isinstance(glic, str):
                 result.license_name = glic
+            raw_tags = raw_metadata.get("general.tags")
+            if isinstance(raw_tags, list):
+                result.tags = [
+                    str(t).strip().lower()
+                    for t in raw_tags
+                    if isinstance(t, str) and str(t).strip()
+                ]
             clip_vision = raw_metadata.get("clip.has_vision_encoder")
             if isinstance(clip_vision, bool):
                 result.has_vision_encoder = clip_vision
+            clip_audio = raw_metadata.get("clip.has_audio_encoder")
+            if isinstance(clip_audio, bool):
+                result.has_audio_encoder = clip_audio
+            proj_type = raw_metadata.get("clip.projector_type")
+            if isinstance(proj_type, str):
+                result.projector_type = proj_type
+            proj_dim = raw_metadata.get("clip.vision.projection_dim")
+            if isinstance(proj_dim, int) and not isinstance(proj_dim, bool) and proj_dim > 0:
+                result.vision_projection_dim = proj_dim
 
             # 3. Quantization from general.file_type ONLY (llama.cpp b10936 llama_ftype mapping)
             ftype = raw_metadata.get("general.file_type")
@@ -305,9 +399,16 @@ def read_gguf_metadata(path: Path) -> GGUFMetadata:
             if isinstance(qver, int):
                 result.quantization_version = qver
 
+            if result.reasoning_mode == "unknown":
+                result.reasoning_mode = _infer_reasoning_from_name(
+                    f"{path.name} {result.model_name} {result.basename}"
+                )
+
             if cache_key is not None:
                 _GGUF_METADATA_CACHE[cache_key] = replace(
-                    result, raw_metadata=dict(result.raw_metadata)
+                    result,
+                    tags=list(result.tags),
+                    raw_metadata=dict(result.raw_metadata),
                 )
 
     except Exception as exc:
@@ -315,6 +416,51 @@ def read_gguf_metadata(path: Path) -> GGUFMetadata:
         return result
 
     return result
+
+
+def _estimate_kv_overhead_gb(context_tokens: int) -> float:
+    if context_tokens <= 2048:
+        return 0.45
+    if context_tokens <= 4096:
+        return 0.85
+    if context_tokens <= 8192:
+        return 1.75
+    if context_tokens <= 16384:
+        return 3.3
+    if context_tokens <= 32768:
+        return 5.8
+    return round(min(12.0, 5.8 + (context_tokens - 32768) / 8192 * 1.4), 2)
+
+
+EXPLICIT_CONTEXT_TOKENS: Dict[str, int] = {
+    "2k": 2048,
+    "4k": 4096,
+    "8k": 8192,
+    "16k": 16384,
+    "32k": 32768,
+}
+
+
+def resolve_context_size_for_mode(
+    base_ctx: int,
+    context_mode: str,
+    model_max_context: Optional[int] = None,
+) -> int:
+    """Resolve effective n_ctx for a profile default or explicit context_mode."""
+    mode = (context_mode or "profile").strip().lower()
+    safe_max = (
+        model_max_context
+        if isinstance(model_max_context, int)
+        and not isinstance(model_max_context, bool)
+        and model_max_context > 0
+        else None
+    )
+    if mode in EXPLICIT_CONTEXT_TOKENS:
+        target = EXPLICIT_CONTEXT_TOKENS[mode]
+        return min(target, safe_max) if (safe_max and safe_max >= 2048) else target
+    if mode == "model_max":
+        return min(max(safe_max or 32768, 4096), 131072)
+    return base_ctx
 
 
 def assess_hardware_suitability(
@@ -341,11 +487,7 @@ def assess_hardware_suitability(
     usable_vram_gb = max(0.0, vram_budget - os_reserve_gb)
 
     ctx = context_size or 4096
-    kv_overhead_gb = (
-        0.85
-        if ctx <= 4096
-        else (1.75 if ctx <= 8192 else (3.3 if ctx <= 16384 else 5.0))
-    )
+    kv_overhead_gb = _estimate_kv_overhead_gb(ctx)
     estimated_vram_gb = round(weights_gb * 1.15 + kv_overhead_gb, 2)
     est_max_gb = round(weights_gb * 1.15 + 1.75, 2)
 
@@ -418,6 +560,184 @@ def compute_recommended_profiles_for_model(
         elif balanced.status == "supported_with_warning":
             ordered.append("eco")
     return ordered, balanced.estimated_vram_gb
+
+
+def assess_context_options(
+    file_size_bytes: int,
+    *,
+    companion_size_bytes: int = 0,
+    profile: str = "balanced",
+    model_max_context: Optional[int] = None,
+    dedicated_vram_gb: Optional[float] = None,
+    total_ram_gb: Optional[float] = None,
+    fallback_vram_gb: float = 0.0,
+):
+    """Evaluate all selectable CTX modes against PC hardware and model limits."""
+    from app.schemas.model_registry import ContextOptionAssessmentOut
+    from app.services.hardware_probe import probe_host_hardware
+
+    hw = None
+    if dedicated_vram_gb is None or total_ram_gb is None:
+        hw = probe_host_hardware()
+    vram_budget = float(
+        dedicated_vram_gb if dedicated_vram_gb is not None else hw.dedicated_vram_gb
+    )
+    ram_budget = float(total_ram_gb if total_ram_gb is not None else hw.total_ram_gb)
+
+    effective_bytes = file_size_bytes
+    if effective_bytes <= 0 and fallback_vram_gb > 0.0:
+        effective_bytes = int(max(0.5, fallback_vram_gb * 0.85) * (1024 ** 3))
+
+    weights_gb = max(0.0, float(effective_bytes + max(0, companion_size_bytes))) / (1024 ** 3)
+    os_reserve_gb = max(1.2, vram_budget * 0.15)
+    usable_vram_gb = max(0.0, vram_budget - os_reserve_gb)
+
+    safe_max = (
+        model_max_context
+        if isinstance(model_max_context, int)
+        and not isinstance(model_max_context, bool)
+        and model_max_context > 0
+        else None
+    )
+    p = (profile or "balanced").strip().lower()
+    profile_default_ctx = {"eco": 2048, "balanced": 4096, "maximum": 8192}.get(p, 4096)
+    if safe_max is not None and profile_default_ctx > safe_max:
+        profile_default_ctx = safe_max
+    model_max_tokens = min(max(safe_max or 32768, 4096), 131072)
+
+    def _ctx_label(mode_key: str, tokens: int) -> str:
+        if mode_key == "profile":
+            k_str = f"{tokens // 1024}K" if tokens % 1024 == 0 else f"{tokens:,}"
+            return f"Auto ({p.capitalize()} · {k_str})"
+        if mode_key == "model_max":
+            if safe_max is not None:
+                k_str = (
+                    f"{model_max_tokens // 1024}K"
+                    if model_max_tokens % 1024 == 0
+                    else f"{model_max_tokens:,}"
+                )
+                return f"Model Max ({k_str})"
+            return "Model Max (32K+)"
+        return {
+            "2k": "2K (2,048)",
+            "4k": "4K (4,096)",
+            "8k": "8K (8,192)",
+            "16k": "16K (16,384)",
+            "32k": "32K (32,768)",
+        }[mode_key]
+
+    specs = [
+        ("profile", profile_default_ctx),
+        ("2k", 2048),
+        ("4k", 4096),
+        ("8k", 8192),
+        ("16k", 16384),
+        ("32k", 32768),
+        ("model_max", model_max_tokens),
+    ]
+
+    options: List[ContextOptionAssessmentOut] = []
+    for mode_key, tokens in specs:
+        kv_gb = _estimate_kv_overhead_gb(tokens)
+        est_gb = round(weights_gb * 1.15 + kv_gb, 2)
+        exceeds_max = bool(
+            mode_key != "profile" and safe_max is not None and tokens > safe_max
+        )
+        if exceeds_max:
+            status: Literal["good_fit", "tight", "blocked"] = "blocked"
+            selectable = False
+            reason = f"Exceeds model limit ({safe_max:,} tokens max)."
+        elif p == "eco":
+            if est_gb <= ram_budget * 0.72:
+                status = "good_fit"
+                selectable = True
+                reason = (
+                    f"Fits system RAM (~{est_gb:.1f} GB of {ram_budget:.1f} GB RAM; Eco CPU offload)."
+                )
+            elif est_gb <= ram_budget * 0.85:
+                status = "tight"
+                selectable = True
+                reason = (
+                    f"Tight fit in system RAM (~{est_gb:.1f} GB of {ram_budget:.1f} GB RAM); slower on CPU."
+                )
+            else:
+                status = "blocked"
+                selectable = mode_key == "profile"
+                reason = (
+                    f"Memory overflow risk (~{est_gb:.1f} GB needed vs {ram_budget:.1f} GB RAM)."
+                )
+        else:
+            if est_gb <= usable_vram_gb * 0.78:
+                status = "good_fit"
+                selectable = True
+                reason = (
+                    f"Good fit (~{est_gb:.1f} GB of ~{usable_vram_gb:.1f} GB usable GPU VRAM)."
+                )
+            elif est_gb <= usable_vram_gb:
+                status = "tight"
+                selectable = True
+                reason = (
+                    f"Tight GPU fit (~{est_gb:.1f} GB of ~{usable_vram_gb:.1f} GB usable); may slow down."
+                )
+            else:
+                status = "blocked"
+                selectable = mode_key == "profile"
+                reason = (
+                    f"Overflow risk on {vram_budget:.1f} GB GPU (~{est_gb:.1f} GB needed vs ~{usable_vram_gb:.1f} GB usable)."
+                )
+
+        options.append(
+            ContextOptionAssessmentOut(
+                mode=mode_key,  # type: ignore[arg-type]
+                label=_ctx_label(mode_key, tokens),
+                context_tokens=tokens,
+                estimated_vram_gb=est_gb,
+                status=status,
+                selectable=selectable,
+                exceeds_model_max=exceeds_max,
+                reason=reason,
+            )
+        )
+    return options
+
+
+def assess_context_options_for_entry(
+    entry: Optional[ModelRegistryEntry],
+    *,
+    profile: str = "balanced",
+    dedicated_vram_gb: Optional[float] = None,
+    total_ram_gb: Optional[float] = None,
+):
+    """Resolve model footprint from a ModelRegistryEntry and return assess_context_options()."""
+    primary_bytes = 0
+    companion_bytes = 0
+    model_max_ctx: Optional[int] = None
+    fallback_vram = 2.5
+
+    if entry is not None:
+        raw_ctx = getattr(entry.manifest, "model_max_context", None)
+        if isinstance(raw_ctx, int) and not isinstance(raw_ctx, bool) and raw_ctx > 0:
+            model_max_ctx = raw_ctx
+        fallback_vram = float(getattr(entry.hints, "estimated_vram_gb", 0.0) or 0.0)
+        if entry.library_state.primary_file_exists:
+            base_dir = _asset_root_for_entry(entry)
+            p_path = _resolve_asset_path(base_dir, entry.manifest.primary_file)
+            if p_path is not None and p_path.is_file():
+                primary_bytes = p_path.stat().st_size
+            for comp in entry.manifest.companion_files:
+                c_path = _resolve_asset_path(base_dir, comp.path)
+                if c_path is not None and c_path.is_file():
+                    companion_bytes += c_path.stat().st_size
+
+    return assess_context_options(
+        primary_bytes,
+        companion_size_bytes=companion_bytes,
+        profile=profile,
+        model_max_context=model_max_ctx,
+        dedicated_vram_gb=dedicated_vram_gb,
+        total_ram_gb=total_ram_gb,
+        fallback_vram_gb=fallback_vram if primary_bytes <= 0 else 0.0,
+    )
 
 
 def _get_factory_model_root() -> Path:

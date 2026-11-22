@@ -66,7 +66,7 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
   String? _selectedModelId;
   String? _modelActionMessage;
   bool _isUpdatingProfile = false;
-  bool _contextOptionsExpanded = false;
+  bool _allowUnsafeExperimentalCtx = false;
   bool _isScanningInbox = false;
   bool _movePickedFiles = false;
   String? _installingRelativePath;
@@ -75,6 +75,7 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
   String? _importInboxDir;
   ModelImportScanOut? _inboxScanResult;
   final Map<String, TextEditingController> _candidateNameControllers = {};
+  final Map<String, String?> _selectedCandidateMmproj = {};
 
   DesktopNavDestination _lastDestination = DesktopNavDestination.chat;
   SettingsSectionId _lastSection = SettingsSectionId.appearance;
@@ -96,6 +97,7 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
 
     if (storageChanged) {
       _lastStorageRevision = storageRev;
+      _selectedCandidateMmproj.clear();
       if (mounted) {
         setState(() {
           _inboxScanResult = null;
@@ -308,6 +310,7 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
               storageResp.importInboxDir.isNotEmpty &&
               _importInboxDir != storageResp.importInboxDir) {
             _inboxScanResult = null;
+            _selectedCandidateMmproj.clear();
           }
           if (storageResp.importInboxDir.isNotEmpty) {
             _importInboxDir = storageResp.importInboxDir;
@@ -315,9 +318,6 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
           if (storageResp.libraryRoot.isNotEmpty) {
             _libraryRoot = storageResp.libraryRoot;
           }
-        }
-        if (statusResp.requestedContextMode != 'profile') {
-          _contextOptionsExpanded = true;
         }
         _isLoadingModelCatalog = false;
       });
@@ -666,10 +666,10 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
     }
   }
 
-  Future<void> _browseAndStageModelFiles() async {
+  Future<void> _browseAndStageModelFiles({String? dialogTitle}) async {
     if (_isScanningInbox || _installingRelativePath != null) return;
     final pickedPaths = await _shell.pickModelFiles(
-      title: 'Select AI Model Files (.gguf / mmproj)',
+      title: dialogTitle ?? 'Select AI Model Files (.gguf / mmproj)',
       allowMultiple: true,
     );
     if (pickedPaths.isEmpty || !mounted) return;
@@ -732,10 +732,16 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
       final client = _resolveClient();
       final scanOut = await client.scanModelImportInbox();
       if (!mounted) return;
+      final activePaths = scanOut.candidates.map((c) => c.relativePath).toSet();
+      _selectedCandidateMmproj.removeWhere((k, _) => !activePaths.contains(k));
       for (final c in scanOut.candidates) {
         _candidateNameControllers.putIfAbsent(
           c.relativePath,
           () => TextEditingController(text: c.displayName),
+        );
+        _selectedCandidateMmproj.putIfAbsent(
+          c.relativePath,
+          () => c.companionMmprojRelativePath,
         );
       }
       setState(() {
@@ -768,10 +774,13 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
     try {
       final client = _resolveClient();
       final customName = _candidateNameControllers[cand.relativePath]?.text.trim();
+      final selectedMmproj = _selectedCandidateMmproj.containsKey(cand.relativePath)
+          ? _selectedCandidateMmproj[cand.relativePath]
+          : cand.companionMmprojRelativePath;
       final res = await client.installModelFromInbox(
         ModelImportInstallRequest(
           relativePath: cand.relativePath,
-          companionRelativePath: cand.companionMmprojRelativePath,
+          companionRelativePath: selectedMmproj,
           modelId: cand.suggestedModelId,
           displayName: (customName != null && customName.isNotEmpty)
               ? customName
@@ -783,6 +792,7 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
         ),
       );
       if (!mounted) return;
+      _selectedCandidateMmproj.remove(cand.relativePath);
       setState(() {
         _installingRelativePath = null;
         _modelActionMessage = 'Installed ${res.displayName} into your library.';
@@ -1027,112 +1037,22 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
                 ),
             ],
           ),
-          const SizedBox(height: CompanionSpacing.sm),
-          InkWell(
-            key: const Key('experimental_context_toggle'),
-            borderRadius: CompanionRadius.borderSm,
-            onTap: () {
-              setState(() {
-                _contextOptionsExpanded = !_contextOptionsExpanded;
-              });
-            },
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    _contextOptionsExpanded
-                        ? Icons.expand_less_rounded
-                        : Icons.expand_more_rounded,
-                    size: 16,
-                    color: ext?.textSecondary,
-                  ),
-                  const SizedBox(width: 4),
-                  Flexible(
-                    child: Text(
-                      'Advanced: Context Memory Window (>8K Experimental)',
-                      style: CompanionTypography.caption.copyWith(
-                        color: ext?.textSecondary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+          const SizedBox(height: CompanionSpacing.md),
+          Text(
+            'Context Length (CTX)',
+            style: CompanionTypography.bodySmall.copyWith(
+              color: ext?.textSecondary,
+              fontWeight: FontWeight.w600,
             ),
           ),
-          if (_contextOptionsExpanded) ...[
-            const SizedBox(height: CompanionSpacing.xs),
-            Wrap(
-              spacing: CompanionSpacing.sm,
-              runSpacing: CompanionSpacing.xs,
-              children: [
-                ChoiceChip(
-                  key: const Key('ctx_mode_profile'),
-                  label: const Text('Use Profile Default (2K / 4K / 8K)'),
-                  selected: reqCtxMode == 'profile',
-                  onSelected: (_isUpdatingProfile || _isExecutingModelAction)
-                      ? null
-                      : (_) => _updateHardwareProfile(
-                            status?.requestedProfile ?? 'balanced',
-                            contextMode: 'profile',
-                          ),
-                ),
-                ChoiceChip(
-                  key: const Key('ctx_mode_16k'),
-                  label: const Text('16K Context (Experimental)'),
-                  selected: reqCtxMode == '16k',
-                  onSelected: (_isUpdatingProfile || _isExecutingModelAction)
-                      ? null
-                      : (_) => _updateHardwareProfile(
-                            status?.requestedProfile ?? 'balanced',
-                            contextMode: '16k',
-                          ),
-                ),
-                ChoiceChip(
-                  key: const Key('ctx_mode_model_max'),
-                  label: const Text('Model Max (Experimental)'),
-                  selected: reqCtxMode == 'model_max',
-                  onSelected: (_isUpdatingProfile || _isExecutingModelAction)
-                      ? null
-                      : (_) => _updateHardwareProfile(
-                            status?.requestedProfile ?? 'balanced',
-                            contextMode: 'model_max',
-                          ),
-                ),
-              ],
-            ),
-            if (reqCtxMode != 'profile') ...[
-              const SizedBox(height: CompanionSpacing.xs),
-              Container(
-                padding: const EdgeInsets.all(CompanionSpacing.sm),
-                decoration: BoxDecoration(
-                  color: (ext?.warning ?? CompanionColors.warning)
-                      .withValues(alpha: 0.14),
-                  borderRadius: CompanionRadius.borderSm,
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      Icons.warning_amber_rounded,
-                      size: 16,
-                      color: ext?.warning ?? CompanionColors.warning,
-                    ),
-                    const SizedBox(width: CompanionSpacing.sm),
-                    Expanded(
-                      child: Text(
-                        'Experimental Warning: Context windows above 8K sharply increase VRAM & RAM usage and may spill to slow system memory or crash on <= 8 GB GPUs. Reload the model to apply.',
-                        style: CompanionTypography.caption
-                            .copyWith(color: ext?.textPrimary),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ],
+          const SizedBox(height: CompanionSpacing.xs),
+          ..._buildContextSelectorControls(
+            context,
+            ext: ext,
+            isDark: isDark,
+            status: status,
+            reqCtxMode: reqCtxMode,
+          ),
 
           if (_modelActionMessage != null) ...[
             const SizedBox(height: CompanionSpacing.md),
@@ -1400,11 +1320,35 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
                             _buildInfoChip(cand.architecture, ext),
                           if (cand.quantization.isNotEmpty)
                             _buildInfoChip(cand.quantization, ext),
-                          if (cand.companionMmprojFilename != null)
-                            _buildInfoChip(
-                                'Vision projector: ${cand.companionMmprojFilename}',
-                                ext,
+                          if (cand.reasoningMode == 'always_on')
+                            _buildInfoChip('Reasoning (Always On)', ext,
+                                highlight: true)
+                          else if (cand.reasoningMode == 'toggleable')
+                            _buildInfoChip('Reasoning (Toggleable)', ext,
                                 highlight: true),
+                          Builder(
+                            builder: (_) {
+                              final selectedMmproj = _selectedCandidateMmproj
+                                      .containsKey(cand.relativePath)
+                                  ? _selectedCandidateMmproj[cand.relativePath]
+                                  : cand.companionMmprojRelativePath;
+                              if (selectedMmproj != null) {
+                                final fileName = selectedMmproj.split('/').last;
+                                return _buildInfoChip(
+                                  'Vision Paired: $fileName',
+                                  ext,
+                                  highlight: true,
+                                );
+                              }
+                              if (cand.expectsVisionProjector) {
+                                return _buildInfoChip(
+                                  'Vision model — mmproj missing',
+                                  ext,
+                                );
+                              }
+                              return const SizedBox.shrink();
+                            },
+                          ),
                         ],
                       ),
                       const SizedBox(height: CompanionSpacing.xs),
@@ -1414,6 +1358,103 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
                             .copyWith(color: ext?.textSecondary),
                       ),
                       if (cand.artifactValid) ...[
+                        Builder(
+                          builder: (_) {
+                            final ctxStrip = _buildCandidateCtxSummary(cand);
+                            if (ctxStrip == null) {
+                              return const SizedBox.shrink();
+                            }
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                ctxStrip,
+                                style: CompanionTypography.caption.copyWith(
+                                  color: ext?.textMuted,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        if (cand.compatibleMmprojPaths.isNotEmpty ||
+                            cand.companionMmprojRelativePath != null) ...[
+                          const SizedBox(height: CompanionSpacing.sm),
+                          Builder(
+                            builder: (ctx) {
+                              final selectedMmproj = _selectedCandidateMmproj
+                                      .containsKey(cand.relativePath)
+                                  ? _selectedCandidateMmproj[cand.relativePath]
+                                  : cand.companionMmprojRelativePath;
+                              final orderedPaths = <String>[
+                                if (cand.companionMmprojRelativePath != null)
+                                  cand.companionMmprojRelativePath!,
+                                for (final p in cand.compatibleMmprojPaths)
+                                  if (p != cand.companionMmprojRelativePath) p,
+                              ];
+                              final dropdownValue =
+                                  orderedPaths.contains(selectedMmproj)
+                                      ? selectedMmproj
+                                      : null;
+                              String displayMmproj(String relPath) {
+                                final name = relPath.split('/').last;
+                                return relPath ==
+                                        cand.companionMmprojRelativePath
+                                    ? '$name (Auto-matched)'
+                                    : name;
+                              }
+
+                              return InputDecorator(
+                                decoration: const InputDecoration(
+                                  labelText: 'Vision Projector (mmproj)',
+                                  border: OutlineInputBorder(),
+                                  isDense: true,
+                                  contentPadding: EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 6),
+                                ),
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<String?>(
+                                    key: Key(
+                                        'candidate_mmproj_dropdown_${cand.suggestedModelId}'),
+                                    value: dropdownValue,
+                                    isExpanded: true,
+                                    isDense: true,
+                                    items: [
+                                      for (final relPath in orderedPaths)
+                                        DropdownMenuItem<String?>(
+                                          value: relPath,
+                                          child: Text(
+                                            displayMmproj(relPath),
+                                            style: CompanionTypography.bodySmall
+                                                .copyWith(
+                                                    color: ext?.textPrimary),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      DropdownMenuItem<String?>(
+                                        value: null,
+                                        child: Text(
+                                          'None (Install Text-only)',
+                                          style: CompanionTypography.bodySmall
+                                              .copyWith(
+                                                  color: ext?.textSecondary),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                    onChanged: _installingRelativePath != null
+                                        ? null
+                                        : (nextVal) {
+                                            setState(() {
+                                              _selectedCandidateMmproj[
+                                                  cand.relativePath] = nextVal;
+                                            });
+                                          },
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
                         const SizedBox(height: CompanionSpacing.sm),
                         Wrap(
                           spacing: CompanionSpacing.sm,
@@ -1434,6 +1475,34 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
                                   isDense: true,
                                 ),
                               ),
+                            ),
+                            Builder(
+                              builder: (_) {
+                                final selectedMmproj = _selectedCandidateMmproj
+                                        .containsKey(cand.relativePath)
+                                    ? _selectedCandidateMmproj[
+                                        cand.relativePath]
+                                    : cand.companionMmprojRelativePath;
+                                if (!cand.expectsVisionProjector ||
+                                    selectedMmproj != null) {
+                                  return const SizedBox.shrink();
+                                }
+                                return OutlinedButton.icon(
+                                  key: Key(
+                                      'attach_mmproj_${cand.suggestedModelId}'),
+                                  onPressed: (_isScanningInbox ||
+                                          _installingRelativePath != null)
+                                      ? null
+                                      : () => _browseAndStageModelFiles(
+                                            dialogTitle:
+                                                'Select Vision Projector (mmproj-*.gguf) for ${cand.displayName}',
+                                          ),
+                                  icon: const Icon(
+                                      Icons.add_photo_alternate_outlined,
+                                      size: 15),
+                                  label: const Text('Attach mmproj...'),
+                                );
+                              },
                             ),
                             OutlinedButton(
                               onPressed: () => _updateHardwareProfile(
@@ -2251,6 +2320,295 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
         ),
       ),
     );
+  }
+
+  List<ContextOptionAssessmentOut> _fallbackContextOptions(String profile) {
+    final p = profile.toLowerCase();
+    final autoTok = p == 'eco' ? 2048 : (p == 'maximum' ? 8192 : 4096);
+    final autoK = '${autoTok ~/ 1024}K';
+    return [
+      ContextOptionAssessmentOut(
+        mode: 'profile',
+        label: 'Auto (${p[0].toUpperCase()}${p.substring(1)} · $autoK)',
+        contextTokens: autoTok,
+        estimatedVramGb: 3.0,
+        status: 'good_fit',
+        selectable: true,
+        exceedsModelMax: false,
+        reason: 'Follows active performance mode.',
+      ),
+      const ContextOptionAssessmentOut(
+        mode: '2k',
+        label: '2K (2,048)',
+        contextTokens: 2048,
+        estimatedVramGb: 2.5,
+        status: 'good_fit',
+        selectable: true,
+        exceedsModelMax: false,
+        reason: 'Low memory footprint.',
+      ),
+      const ContextOptionAssessmentOut(
+        mode: '4k',
+        label: '4K (4,096)',
+        contextTokens: 4096,
+        estimatedVramGb: 3.0,
+        status: 'good_fit',
+        selectable: true,
+        exceedsModelMax: false,
+        reason: 'Standard balanced context window.',
+      ),
+      const ContextOptionAssessmentOut(
+        mode: '8k',
+        label: '8K (8,192)',
+        contextTokens: 8192,
+        estimatedVramGb: 4.5,
+        status: 'tight',
+        selectable: true,
+        exceedsModelMax: false,
+        reason: 'Moderate memory use.',
+      ),
+      const ContextOptionAssessmentOut(
+        mode: '16k',
+        label: '16K (16,384)',
+        contextTokens: 16384,
+        estimatedVramGb: 7.2,
+        status: 'blocked',
+        selectable: false,
+        exceedsModelMax: false,
+        reason: 'High VRAM/RAM risk on <= 8 GB GPUs.',
+      ),
+      const ContextOptionAssessmentOut(
+        mode: '32k',
+        label: '32K (32,768)',
+        contextTokens: 32768,
+        estimatedVramGb: 9.8,
+        status: 'blocked',
+        selectable: false,
+        exceedsModelMax: false,
+        reason: 'High VRAM/RAM overflow risk.',
+      ),
+      const ContextOptionAssessmentOut(
+        mode: 'model_max',
+        label: 'Model Max (32K+)',
+        contextTokens: 32768,
+        estimatedVramGb: 9.8,
+        status: 'blocked',
+        selectable: false,
+        exceedsModelMax: false,
+        reason: 'Uses model maximum context limit.',
+      ),
+    ];
+  }
+
+  List<Widget> _buildContextSelectorControls(
+    BuildContext context, {
+    required CompanionThemeExtension? ext,
+    required bool isDark,
+    required ModelStatusResponse? status,
+    required String reqCtxMode,
+  }) {
+    final profile = status?.requestedProfile ?? 'balanced';
+    final rawOptions =
+        status?.contextOptions ?? const <ContextOptionAssessmentOut>[];
+    final options =
+        rawOptions.isNotEmpty ? rawOptions : _fallbackContextOptions(profile);
+    final safeValue =
+        options.any((o) => o.mode == reqCtxMode) ? reqCtxMode : 'profile';
+    final activeOpt = options.firstWhere(
+      (o) => o.mode == safeValue,
+      orElse: () => options.first,
+    );
+    final isBlockedActive = safeValue != 'profile' && !activeOpt.selectable;
+
+    Color statusColor(ContextOptionAssessmentOut opt) {
+      if (opt.status == 'good_fit') {
+        return ext?.success ?? CompanionColors.success;
+      }
+      if (opt.status == 'tight') {
+        return ext?.warning ?? CompanionColors.warning;
+      }
+      return ext?.danger ?? CompanionColors.danger;
+    }
+
+    String statusBadge(ContextOptionAssessmentOut opt) {
+      if (opt.exceedsModelMax) return 'Exceeds Model Max';
+      if (opt.status == 'blocked') return 'Overflow Risk';
+      if (opt.status == 'tight') return 'Tight · Slower';
+      return 'Good Fit';
+    }
+
+    return [
+      InputDecorator(
+        decoration: const InputDecoration(
+          border: OutlineInputBorder(),
+          isDense: true,
+          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            key: const Key('ctx_mode_dropdown'),
+            value: safeValue,
+            isExpanded: true,
+            isDense: true,
+            selectedItemBuilder: (ctx) => [
+              for (final opt in options)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '${opt.label} — ${statusBadge(opt)}',
+                    style: CompanionTypography.bodySmall
+                        .copyWith(color: ext?.textPrimary),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+            ],
+            items: [
+              for (final opt in options)
+                DropdownMenuItem<String>(
+                  key: Key('ctx_dropdown_item_${opt.mode}'),
+                  value: opt.mode,
+                  enabled: opt.selectable ||
+                      (_allowUnsafeExperimentalCtx && !opt.exceedsModelMax),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          opt.label,
+                          style: CompanionTypography.bodySmall.copyWith(
+                            color: (opt.selectable ||
+                                    (_allowUnsafeExperimentalCtx &&
+                                        !opt.exceedsModelMax))
+                                ? ext?.textPrimary
+                                : ext?.textMuted,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        statusBadge(opt),
+                        style: CompanionTypography.caption.copyWith(
+                          color: statusColor(opt),
+                          fontWeight: FontWeight.w600,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+            onChanged: (_isUpdatingProfile || _isExecutingModelAction)
+                ? null
+                : (nextMode) {
+                    if (nextMode != null && nextMode != safeValue) {
+                      _updateHardwareProfile(profile, contextMode: nextMode);
+                    }
+                  },
+          ),
+        ),
+      ),
+      const SizedBox(height: CompanionSpacing.xs),
+      Text(
+        activeOpt.reason,
+        style: CompanionTypography.caption.copyWith(color: ext?.textSecondary),
+      ),
+      const SizedBox(height: CompanionSpacing.xs),
+      Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Switch(
+            key: const Key('unsafe_ctx_toggle'),
+            value: _allowUnsafeExperimentalCtx,
+            onChanged: (v) => setState(() => _allowUnsafeExperimentalCtx = v),
+          ),
+          Flexible(
+            child: Text(
+              'Allow unsafe experimental CTX (unlock VRAM overflow options)',
+              style: CompanionTypography.caption
+                  .copyWith(color: ext?.textSecondary),
+            ),
+          ),
+        ],
+      ),
+      if (isBlockedActive ||
+          _allowUnsafeExperimentalCtx ||
+          safeValue == '16k' ||
+          safeValue == '32k' ||
+          safeValue == 'model_max') ...[
+        const SizedBox(height: CompanionSpacing.xs),
+        Container(
+          padding: const EdgeInsets.all(CompanionSpacing.sm),
+          decoration: BoxDecoration(
+            color: (isBlockedActive
+                    ? (ext?.danger ?? CompanionColors.danger)
+                    : (ext?.warning ?? CompanionColors.warning))
+                .withValues(alpha: 0.14),
+            borderRadius: CompanionRadius.borderSm,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                isBlockedActive
+                    ? Icons.error_outline_rounded
+                    : Icons.warning_amber_rounded,
+                size: 16,
+                color: isBlockedActive
+                    ? (ext?.danger ?? CompanionColors.danger)
+                    : (ext?.warning ?? CompanionColors.warning),
+              ),
+              const SizedBox(width: CompanionSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isBlockedActive
+                          ? 'Active context (${activeOpt.label}) exceeds safe limits for the current model/hardware (${activeOpt.reason}). Reset to Auto or reload with caution.'
+                          : 'Experimental CTX enabled: large context windows sharply increase VRAM & RAM usage and may spill to system memory or slow down on <= 8 GB GPUs. Reload the model to apply.',
+                      style: CompanionTypography.caption
+                          .copyWith(color: ext?.textPrimary),
+                    ),
+                    if (isBlockedActive) ...[
+                      const SizedBox(height: CompanionSpacing.xs),
+                      TextButton.icon(
+                        key: const Key('ctx_reset_auto_button'),
+                        onPressed:
+                            (_isUpdatingProfile || _isExecutingModelAction)
+                                ? null
+                                : () => _updateHardwareProfile(
+                                      profile,
+                                      contextMode: 'profile',
+                                    ),
+                        icon: const Icon(Icons.restore_rounded, size: 14),
+                        label: const Text('Reset to Auto (Profile Default)'),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ];
+  }
+
+  String? _buildCandidateCtxSummary(ModelImportCandidateOut cand) {
+    if (cand.contextOptions.isEmpty) return null;
+    final parts = <String>[];
+    for (final modeKey in const ['2k', '4k', '8k', '16k', '32k']) {
+      final matches = cand.contextOptions.where((o) => o.mode == modeKey);
+      if (matches.isEmpty) continue;
+      final opt = matches.first;
+      final shortTag = opt.exceedsModelMax
+          ? 'Max Limit'
+          : (opt.status == 'good_fit'
+              ? 'Good'
+              : (opt.status == 'tight' ? 'Tight' : 'Overflow'));
+      parts.add('${modeKey.toUpperCase()}: $shortTag');
+    }
+    return parts.isEmpty ? null : 'CTX Fit — ${parts.join(' · ')}';
   }
 
   Widget _buildInfoChip(

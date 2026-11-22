@@ -277,6 +277,8 @@ SCHEMA_TO_DART_CLASS: Dict[str, Tuple[str, str]] = {
     "LibraryRootUpdateRequest": ("system_status_dto.dart", "LibraryRootUpdateRequest"),
     "AutostartStatusOut": ("system_status_dto.dart", "AutostartStatusOut"),
     "AutostartUpdateRequest": ("system_status_dto.dart", "AutostartUpdateRequest"),
+    "ContextOptionAssessmentOut": ("model_registry_dto.dart", "ContextOptionAssessmentOut"),
+    "InboxMmprojOut": ("model_registry_dto.dart", "InboxMmprojOut"),
     "PreflightAssessmentOut": ("model_registry_dto.dart", "PreflightAssessmentOut"),
     "ModelImportCandidateOut": ("model_registry_dto.dart", "ModelImportCandidateOut"),
     "ModelImportScanOut": ("model_registry_dto.dart", "ModelImportScanOut"),

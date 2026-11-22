@@ -119,6 +119,29 @@ void main() {
               jsonEncode({
                 'provider': 'llama_cpp',
                 'requested_profile': 'eco',
+                'requested_context_mode': '8k',
+                'context_options': [
+                  {
+                    'mode': 'profile',
+                    'label': 'Auto (Eco · 2K)',
+                    'context_tokens': 2048,
+                    'estimated_vram_gb': 2.75,
+                    'status': 'good_fit',
+                    'selectable': true,
+                    'exceeds_model_max': false,
+                    'reason': 'Fits comfortably',
+                  },
+                  {
+                    'mode': '16k',
+                    'label': '16K (16,384)',
+                    'context_tokens': 16384,
+                    'estimated_vram_gb': 9.2,
+                    'status': 'blocked',
+                    'selectable': false,
+                    'exceeds_model_max': false,
+                    'reason': 'Overflow risk on 8.0 GB GPU',
+                  },
+                ],
               }),
               200,
             );
@@ -137,7 +160,22 @@ void main() {
                     'artifact_valid': true,
                     'architecture': 'gemma3',
                     'quantization': 'Q4_K_M',
-                    'detected_capabilities': ['chat', 'vision'],
+                    'expects_vision_projector': true,
+                    'reasoning_mode': 'toggleable',
+                    'compatible_mmproj_paths': ['gemma/mmproj-model-f16.gguf'],
+                    'detected_capabilities': ['chat', 'vision', 'reasoning'],
+                    'context_options': [
+                      {
+                        'mode': '4k',
+                        'label': '4K (4,096)',
+                        'context_tokens': 4096,
+                        'estimated_vram_gb': 3.15,
+                        'status': 'good_fit',
+                        'selectable': true,
+                        'exceeds_model_max': false,
+                        'reason': 'Good fit',
+                      },
+                    ],
                     'preflight': {
                       'status': 'recommended',
                       'estimated_vram_gb': 2.9,
@@ -145,6 +183,16 @@ void main() {
                       'recommended_profile': 'balanced',
                       'message': 'Fits comfortably',
                     },
+                  }
+                ],
+                'available_mmprojs': [
+                  {
+                    'relative_path': 'gemma/mmproj-model-f16.gguf',
+                    'filename': 'mmproj-model-f16.gguf',
+                    'size_gb': 0.8,
+                    'model_name': '',
+                    'projector_type': 'gemma3',
+                    'vision_projection_dim': 2560,
                   }
                 ],
                 'warnings': <String>[],
@@ -199,9 +247,18 @@ void main() {
 
       final profStatus = await client.updateModelProfile('eco');
       expect(profStatus.requestedProfile, equals('eco'));
+      expect(profStatus.requestedContextMode, equals('8k'));
+      expect(profStatus.contextOptions.length, equals(2));
+      expect(profStatus.contextOptions[1].selectable, isFalse);
 
       final scan = await client.scanModelImportInbox();
       expect(scan.candidates.single.suggestedModelId, equals('gemma'));
+      expect(scan.candidates.single.expectsVisionProjector, isTrue);
+      expect(scan.candidates.single.reasoningMode, equals('toggleable'));
+      expect(scan.candidates.single.compatibleMmprojPaths, equals(['gemma/mmproj-model-f16.gguf']));
+      expect(scan.candidates.single.contextOptions.single.mode, equals('4k'));
+      expect(scan.availableMmprojs.single.projectorType, equals('gemma3'));
+      expect(scan.availableMmprojs.single.visionProjectionDim, equals(2560));
 
       final installed = await client.installModelFromInbox(
         const ModelImportInstallRequest(

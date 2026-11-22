@@ -1,5 +1,7 @@
 import 'package:meta/meta.dart';
 
+import 'model_registry_dto.dart';
+
 /// DTO representing runtime model status from GET /api/v1/models.
 ///
 /// Phase 3 Truthful Telemetry Contract:
@@ -24,6 +26,7 @@ class ModelStatusResponse {
   final bool modelAwake;
   final String requestedProfile;
   final String requestedContextMode;
+  final List<ContextOptionAssessmentOut> contextOptions;
   final String? appliedProfile;
   final int? appliedContextSize;
   final int? appliedGpuLayers;
@@ -58,6 +61,7 @@ class ModelStatusResponse {
     this.modelAwake = false,
     this.requestedProfile = 'balanced',
     this.requestedContextMode = 'profile',
+    this.contextOptions = const [],
     this.appliedProfile,
     this.appliedContextSize,
     this.appliedGpuLayers,
@@ -102,6 +106,16 @@ class ModelStatusResponse {
       parsedRegistry = null;
     }
 
+    final contextOptionsRaw = json['context_options'];
+    final List<ContextOptionAssessmentOut> parsedContextOptions;
+    if (contextOptionsRaw is List) {
+      parsedContextOptions = contextOptionsRaw
+          .map((e) => ContextOptionAssessmentOut.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    } else {
+      parsedContextOptions = const [];
+    }
+
     return ModelStatusResponse(
       provider: providerVal,
       engineVersion: json['engine_version'] as String? ?? 'b10936',
@@ -115,6 +129,7 @@ class ModelStatusResponse {
       modelAwake: json['model_awake'] as bool? ?? false,
       requestedProfile: json['requested_profile'] as String? ?? 'balanced',
       requestedContextMode: json['requested_context_mode'] as String? ?? 'profile',
+      contextOptions: parsedContextOptions,
       appliedProfile: json['applied_profile'] as String?,
       appliedContextSize: json['applied_context_size'] as int?,
       appliedGpuLayers: json['applied_gpu_layers'] as int?,
@@ -151,6 +166,7 @@ class ModelStatusResponse {
         'model_awake': modelAwake,
         'requested_profile': requestedProfile,
         'requested_context_mode': requestedContextMode,
+        'context_options': contextOptions.map((c) => c.toJson()).toList(),
         if (appliedProfile != null) 'applied_profile': appliedProfile,
         if (appliedContextSize != null) 'applied_context_size': appliedContextSize,
         if (appliedGpuLayers != null) 'applied_gpu_layers': appliedGpuLayers,

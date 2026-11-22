@@ -7700,6 +7700,70 @@
         ],
         "title": "CompanionFile"
       },
+      "ContextOptionAssessmentOut": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "profile",
+              "2k",
+              "4k",
+              "8k",
+              "16k",
+              "32k",
+              "model_max"
+            ],
+            "title": "Mode"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "context_tokens": {
+            "type": "integer",
+            "title": "Context Tokens"
+          },
+          "estimated_vram_gb": {
+            "type": "number",
+            "title": "Estimated Vram Gb"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "good_fit",
+              "tight",
+              "blocked"
+            ],
+            "title": "Status"
+          },
+          "selectable": {
+            "type": "boolean",
+            "title": "Selectable"
+          },
+          "exceeds_model_max": {
+            "type": "boolean",
+            "title": "Exceeds Model Max",
+            "default": false
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "mode",
+          "label",
+          "context_tokens",
+          "estimated_vram_gb",
+          "status",
+          "selectable",
+          "reason"
+        ],
+        "title": "ContextOptionAssessmentOut",
+        "description": "Availability and resource guardrail assessment for a selectable context window."
+      },
       "ConversationCompactRequest": {
         "properties": {
           "keep_recent_messages": {
@@ -8168,6 +8232,52 @@
         "type": "object",
         "title": "HealthResponse",
         "description": "Liveness and readiness status indicator."
+      },
+      "InboxMmprojOut": {
+        "properties": {
+          "relative_path": {
+            "type": "string",
+            "title": "Relative Path"
+          },
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "size_gb": {
+            "type": "number",
+            "title": "Size Gb"
+          },
+          "model_name": {
+            "type": "string",
+            "title": "Model Name",
+            "default": ""
+          },
+          "projector_type": {
+            "type": "string",
+            "title": "Projector Type",
+            "default": ""
+          },
+          "vision_projection_dim": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vision Projection Dim"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "relative_path",
+          "filename",
+          "size_gb"
+        ],
+        "title": "InboxMmprojOut",
+        "description": "Valid mmproj vision projector GGUF discovered inside IMPORT_INBOX_DIR."
       },
       "InputModality": {
         "type": "string",
@@ -9016,6 +9126,16 @@
             "title": "Has Vision Projector",
             "default": false
           },
+          "expects_vision_projector": {
+            "type": "boolean",
+            "title": "Expects Vision Projector",
+            "default": false
+          },
+          "reasoning_mode": {
+            "type": "string",
+            "title": "Reasoning Mode",
+            "default": "unknown"
+          },
           "companion_mmproj_relative_path": {
             "anyOf": [
               {
@@ -9038,12 +9158,26 @@
             ],
             "title": "Companion Mmproj Filename"
           },
+          "compatible_mmproj_paths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Compatible Mmproj Paths"
+          },
           "detected_capabilities": {
             "items": {
               "type": "string"
             },
             "type": "array",
             "title": "Detected Capabilities"
+          },
+          "context_options": {
+            "items": {
+              "$ref": "#/components/schemas/ContextOptionAssessmentOut"
+            },
+            "type": "array",
+            "title": "Context Options"
           },
           "preflight": {
             "$ref": "#/components/schemas/PreflightAssessmentOut"
@@ -9197,6 +9331,13 @@
             },
             "type": "array",
             "title": "Candidates"
+          },
+          "available_mmprojs": {
+            "items": {
+              "$ref": "#/components/schemas/InboxMmprojOut"
+            },
+            "type": "array",
+            "title": "Available Mmprojs"
           },
           "warnings": {
             "items": {
@@ -9447,7 +9588,11 @@
                 "type": "string",
                 "enum": [
                   "profile",
+                  "2k",
+                  "4k",
+                  "8k",
                   "16k",
+                  "32k",
                   "model_max"
                 ]
               },
@@ -9651,6 +9796,13 @@
             "type": "string",
             "title": "Requested Context Mode",
             "default": "profile"
+          },
+          "context_options": {
+            "items": {
+              "$ref": "#/components/schemas/ContextOptionAssessmentOut"
+            },
+            "type": "array",
+            "title": "Context Options"
           },
           "applied_profile": {
             "anyOf": [
