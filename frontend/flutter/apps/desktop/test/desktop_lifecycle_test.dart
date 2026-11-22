@@ -472,6 +472,43 @@ void main() {
       await robust.dispose();
     });
 
+    test('defers maximizeOnStart until first open when booted hidden to tray, and maximizes only once', () async {
+      await coordinator.initialize(showImmediately: false, maximizeOnStart: true);
+      expect(windowAdapter.visible, isFalse);
+      expect(windowAdapter.isMaximized, isFalse);
+      expect(windowAdapter.maximizeCallCount, equals(0));
+
+      // First open from tray maximizes once.
+      coordinator.onTrayIconMouseDown();
+      await pumpEventQueue();
+      expect(windowAdapter.visible, isTrue);
+      expect(windowAdapter.isMaximized, isTrue);
+      expect(windowAdapter.maximizeCallCount, equals(1));
+
+      // Subsequent hide/restore cycles preserve user sizing without re-maximizing.
+      coordinator.onWindowClose();
+      await pumpEventQueue();
+      expect(windowAdapter.visible, isFalse);
+
+      coordinator.onTrayIconMouseDown();
+      await pumpEventQueue();
+      expect(windowAdapter.visible, isTrue);
+      expect(windowAdapter.maximizeCallCount, equals(1));
+
+      // When tray is unavailable on startup, fail-open show still maximizes immediately.
+      final failingTray = FailingDesktopTrayAdapter();
+      final fallbackWindow = FakeDesktopWindowAdapter();
+      final robust = DesktopLifecycleCoordinator(
+        windowAdapter: fallbackWindow,
+        trayAdapter: failingTray,
+      );
+      await robust.initialize(showImmediately: false, maximizeOnStart: true);
+      expect(fallbackWindow.visible, isTrue);
+      expect(fallbackWindow.isMaximized, isTrue);
+      expect(fallbackWindow.maximizeCallCount, equals(1));
+      await robust.dispose();
+    });
+
     test('DesktopRuntimeCoordinator discovers backend 9+ ancestor levels from deep runner path', () async {
       final tempRoot = Directory.systemTemp.createTempSync('deep_runner_test_');
       addTearDown(() => tempRoot.deleteSync(recursive: true));

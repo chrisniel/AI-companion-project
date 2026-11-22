@@ -70,8 +70,7 @@ void main(List<String> args) async {
   final coordinatorInit = coordinator.initialize(
     initialWindowSize: initialSize,
     showImmediately: !startMinimizedToTray,
-    maximizeOnStart:
-        !startMinimizedToTray && initialSize == null && !isVisualEvidenceMode,
+    maximizeOnStart: initialSize == null && !isVisualEvidenceMode,
   );
 
   await coordinatorInit;

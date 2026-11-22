@@ -35,8 +35,21 @@ bool FlutterWindow::OnCreate() {
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
-    if (!this->start_hidden_) {
-      this->Show();
+    // DesktopLifecycleCoordinator owns showing, hiding, and maximizing via
+    // window_manager before runApp(). Never invoke Win32Window::Show()
+    // (SW_SHOWNORMAL) here because SW_SHOWNORMAL un-maximizes a maximized
+    // window back to its restored default bounds on the first Flutter frame.
+    HWND hwnd = this->GetHandle();
+    if (!this->start_hidden_ && hwnd != nullptr && !::IsWindowVisible(hwnd)) {
+      WINDOWPLACEMENT wp{};
+      wp.length = static_cast<UINT>(sizeof(WINDOWPLACEMENT));
+      if (::IsZoomed(hwnd) ||
+          (::GetWindowPlacement(hwnd, &wp) &&
+           wp.showCmd == static_cast<UINT>(SW_SHOWMAXIMIZED))) {
+        ::ShowWindow(hwnd, SW_SHOWMAXIMIZED);
+      } else {
+        ::ShowWindow(hwnd, SW_SHOW);
+      }
     }
   });
 

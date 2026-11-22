@@ -49,6 +49,7 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
   bool _isWindowVisible = false;
   bool _isTrayAvailable = false;
   bool _isDisposed = false;
+  bool _pendingMaximizeOnFirstShow = false;
 
   bool get isInitialized => _isInitialized;
   bool get isWindowVisible => _isWindowVisible;
@@ -93,12 +94,10 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
     );
 
     await windowAdapter.waitUntilReadyToShow(windowOptions);
+    _pendingMaximizeOnFirstShow = maximizeOnStart;
 
     if (showImmediately && !_isDisposed) {
       await restoreAndFocusWindow();
-      if (maximizeOnStart && !_isDisposed) {
-        await windowAdapter.maximize();
-      }
     } else if (!showImmediately && !_isDisposed) {
       if (_isTrayAvailable) {
         await windowAdapter.hide();
@@ -314,6 +313,10 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
     await windowAdapter.show();
     await windowAdapter.focus();
     _isWindowVisible = true;
+    if (_pendingMaximizeOnFirstShow && !_isDisposed) {
+      _pendingMaximizeOnFirstShow = false;
+      await windowAdapter.maximize();
+    }
   }
 
   /// Intercepts the window close action and hides to tray.
