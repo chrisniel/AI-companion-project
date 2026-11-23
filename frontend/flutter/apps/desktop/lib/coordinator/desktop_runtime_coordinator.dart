@@ -205,11 +205,17 @@ class DesktopRuntimeCoordinator {
       return envExe;
     }
 
+    final installRoot = Platform.environment['COMPANION_APP_INSTALL_ROOT'];
     final searchBases = <Directory>[
       Directory.current,
       File(Platform.resolvedExecutable).parent,
+      if (installRoot != null && installRoot.trim().isNotEmpty) Directory(installRoot.trim()),
     ];
+    return resolveExecutablePathFromBases(searchBases);
+  }
 
+  /// Resolves the backend Python interpreter by walking up to 10 ancestor directories.
+  static String resolveExecutablePathFromBases(List<Directory> searchBases) {
     final relativeSubPaths = [
       if (Platform.isWindows) ...[
         r'backend\.venv\Scripts\pythonw.exe',
@@ -224,7 +230,7 @@ class DesktopRuntimeCoordinator {
 
     for (final base in searchBases) {
       Directory current = base.absolute;
-      for (var i = 0; i < 5; i++) {
+      for (var i = 0; i < 10; i++) {
         for (final sub in relativeSubPaths) {
           final candidate = File('${current.path}${Platform.pathSeparator}$sub');
           if (candidate.existsSync()) {
@@ -258,14 +264,20 @@ class DesktopRuntimeCoordinator {
     final envWd = Platform.environment['COMPANION_RUNTIME_DIR'];
     if (envWd != null && envWd.isNotEmpty) return envWd;
 
+    final installRoot = Platform.environment['COMPANION_APP_INSTALL_ROOT'];
     final searchBases = <Directory>[
       Directory.current,
       File(Platform.resolvedExecutable).parent,
+      if (installRoot != null && installRoot.trim().isNotEmpty) Directory(installRoot.trim()),
     ];
+    return resolveWorkingDirectoryFromBases(searchBases);
+  }
 
+  /// Resolves the backend working directory by walking up to 10 ancestor directories.
+  static String resolveWorkingDirectoryFromBases(List<Directory> searchBases) {
     for (final base in searchBases) {
       Directory current = base.absolute;
-      for (var i = 0; i < 5; i++) {
+      for (var i = 0; i < 10; i++) {
         final mainPy = File('${current.path}${Platform.pathSeparator}backend${Platform.pathSeparator}app${Platform.pathSeparator}main.py');
         if (mainPy.existsSync()) {
           return File('${current.path}${Platform.pathSeparator}backend').path;
@@ -719,14 +731,49 @@ class DesktopRuntimeCoordinator {
         _activeRuntimeInfo = null;
       }
 
-      // 5. Evaluate OS process candidates on targetPort under exclusive lock
-      final discovery = await _supervisor.discoverRuntimeProcesses(
-        port: targetPort,
-        expectedExecutable: targetExecutablePath,
-      );
-      if (generation != _activeGeneration || _isDisposed) return _currentState;
+      // 5. Evaluate OS process candidates on targetPort under exclusive lock.
+      // Retry transient WMI/CIM inspection timeouts on cold Windows logon while
+      // continuing to fail closed on access errors or exhausted attempts.
+      ProcessDiscoveryResult? discovery;
+      for (var attempt = 0; attempt < 3; attempt++) {
+        final remaining = remainingTime();
+        if (remaining <= Duration.zero) {
+          discovery = const ProcessDiscoveryResult(
+            status: ProcessDiscoveryStatus.inspectionUnavailable,
+            diagnostic:
+                'Startup budget exhausted before OS process inspection completed',
+          );
+          break;
+        }
+        final discoveryTimeout = remaining < const Duration(seconds: 12)
+            ? remaining
+            : const Duration(seconds: 12);
+        discovery = await _supervisor.discoverRuntimeProcesses(
+          port: targetPort,
+          expectedExecutable: targetExecutablePath,
+          timeout: discoveryTimeout,
+        );
+        if (generation != _activeGeneration || _isDisposed) return _currentState;
 
-      switch (discovery.status) {
+        final isTimeoutFailure =
+            discovery.status == ProcessDiscoveryStatus.inspectionUnavailable &&
+                (discovery.diagnostic ?? '').toLowerCase().contains('timed out');
+        if (!isTimeoutFailure || attempt >= 2) {
+          break;
+        }
+
+        final remAfter = remainingTime();
+        if (remAfter <= const Duration(seconds: 2)) {
+          break;
+        }
+        final backoff = remAfter < const Duration(seconds: 1)
+            ? remAfter
+            : const Duration(seconds: 1);
+        await Future<void>.delayed(backoff);
+        if (generation != _activeGeneration || _isDisposed) return _currentState;
+      }
+
+      switch (discovery!.status) {
         case ProcessDiscoveryStatus.verified:
           final verified = discovery.verifiedProcess!;
           final recoveredDesc = RuntimeLockfileData(

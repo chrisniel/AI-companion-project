@@ -9,10 +9,18 @@ from app.core.config import settings
 from app.schemas.llm import ChatMessage, ModelStatusResponse
 from app.services.llm.base import BaseLLMProvider, GeneratedText, GenerationStream
 from app.services.llm.runtime_state import LLMRuntimeState
-from app.services.model_registry import build_model_list
+from app.services.model_registry import (
+    assess_context_options_for_entry,
+    build_model_list,
+    find_model_registry_entry,
+    resolve_context_size_for_mode,
+)
 
 
+from app.services.hardware_probe import probe_host_hardware
 from app.services.host_config import (
+    VALID_CONTEXT_MODES,
+    get_saved_context_mode,
     get_saved_model_selection,
     resolve_effective_model,
     save_model_selection,
@@ -40,6 +48,7 @@ class MockLLMProvider(BaseLLMProvider):
         self._active_model = None
         self._default_mock_model = default_model
         self._active_profile = settings.LLM_PROFILE
+        self._context_mode = get_saved_context_mode()
         self._last_active_at = datetime.now(timezone.utc)
         self._last_error: Optional[str] = None
         self.scripted_turns: List[Any] = []
@@ -77,8 +86,17 @@ class MockLLMProvider(BaseLLMProvider):
         self._active_model = None
         return True
 
-    async def set_profile(self, profile: str) -> bool:
+    async def set_profile(
+        self,
+        profile: str,
+        context_mode: Optional[str] = None,
+    ) -> bool:
         self._active_profile = profile
+        if context_mode is not None:
+            normalized = context_mode.strip().lower()
+            if normalized not in VALID_CONTEXT_MODES:
+                return False
+            self._context_mode = normalized
         return True
 
     def is_loaded(self) -> bool:
@@ -97,14 +115,40 @@ class MockLLMProvider(BaseLLMProvider):
                 if f.is_file() and f.name != "lfs-test.gguf" and not f.name.startswith("mmproj") and f.stat().st_size > 100 * 1024 * 1024
             ]
 
-        registry_entries = [m.manifest.primary_file for m in build_model_list() if m.library_state.primary_file_exists]
+        all_entries = build_model_list()
+        registry_entries = [m.manifest.primary_file for m in all_entries if m.library_state.primary_file_exists]
 
         saved_selection = get_saved_model_selection()
+        selected_entry = find_model_registry_entry(
+            self._active_model or saved_selection,
+            entries=all_entries,
+        )
+        raw_entry_ctx = (
+            getattr(getattr(selected_entry, "manifest", None), "model_max_context", None)
+            if selected_entry is not None
+            else None
+        )
+        entry_max_ctx = (
+            raw_entry_ctx
+            if isinstance(raw_entry_ctx, int) and not isinstance(raw_entry_ctx, bool)
+            else None
+        )
         is_loaded = self._is_loaded
-        applied_ctx = context_sizes.get(self._active_profile, 4096)
+        applied_ctx = resolve_context_size_for_mode(
+            context_sizes.get(self._active_profile, 4096),
+            self._context_mode,
+            model_max_context=entry_max_ctx,
+        )
         applied_ngl = gpu_layers.get(self._active_profile, settings.LLM_GPU_LAYERS)
         is_eco = self._active_profile == "eco"
         mmproj_flag = not is_eco
+        hw = probe_host_hardware()
+        context_options = assess_context_options_for_entry(
+            selected_entry,
+            profile=self._active_profile,
+            dedicated_vram_gb=hw.dedicated_vram_gb,
+            total_ram_gb=hw.total_ram_gb,
+        )
 
         if is_loaded:
             runtime_state = LLMRuntimeState.MODEL_READY
@@ -129,11 +173,16 @@ class MockLLMProvider(BaseLLMProvider):
             model_loaded=is_loaded,
             model_awake=is_loaded,
             requested_profile=self._active_profile,
+            requested_context_mode=self._context_mode,
+            context_options=context_options,
             applied_profile=self._active_profile,
             applied_context_size=applied_ctx,
             applied_gpu_layers=applied_ngl,
             requested_mmproj_offload=mmproj_flag,
             applied_mmproj_offload=mmproj_flag,
+            host_gpu_name=hw.gpu_name,
+            host_vram_gb=hw.dedicated_vram_gb,
+            host_ram_gb=hw.total_ram_gb,
             mmproj_offload=mmproj_flag,
             generation_active=False,
             last_runtime_error=self._last_error,

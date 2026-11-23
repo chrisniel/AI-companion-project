@@ -42,6 +42,7 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
   Future<void> Function()? onExitMenuTriggered;
   Future<void> Function()? onKillSwitchTriggered;
   Future<void> Function()? onMuteToggleTriggered;
+  VoidCallback? onWindowRestored;
   bool _globalKillSwitchActive = false;
   bool _audioMuted = false;
 
@@ -49,6 +50,8 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
   bool _isWindowVisible = false;
   bool _isTrayAvailable = false;
   bool _isDisposed = false;
+  bool _pendingMaximizeOnFirstShow = false;
+  bool _isRestoringWindow = false;
 
   bool get isInitialized => _isInitialized;
   bool get isWindowVisible => _isWindowVisible;
@@ -93,11 +96,16 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
     );
 
     await windowAdapter.waitUntilReadyToShow(windowOptions);
+    _pendingMaximizeOnFirstShow = maximizeOnStart;
 
     if (showImmediately && !_isDisposed) {
       await restoreAndFocusWindow();
-      if (maximizeOnStart && !_isDisposed) {
-        await windowAdapter.maximize();
+    } else if (!showImmediately && !_isDisposed) {
+      if (_isTrayAvailable) {
+        await windowAdapter.hide();
+        _isWindowVisible = false;
+      } else {
+        await restoreAndFocusWindow();
       }
     }
 
@@ -303,10 +311,23 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
 
   /// Restores the window from hidden/minimized state and requests focus.
   Future<void> restoreAndFocusWindow() async {
-    if (_isDisposed) return;
-    await windowAdapter.show();
-    await windowAdapter.focus();
-    _isWindowVisible = true;
+    if (_isDisposed || _isRestoringWindow) return;
+    _isRestoringWindow = true;
+    try {
+      final wasHidden = !_isWindowVisible;
+      await windowAdapter.show();
+      await windowAdapter.focus();
+      _isWindowVisible = true;
+      if (_pendingMaximizeOnFirstShow && !_isDisposed) {
+        _pendingMaximizeOnFirstShow = false;
+        await windowAdapter.maximize();
+      }
+      if (wasHidden && _isInitialized && !_isDisposed) {
+        onWindowRestored?.call();
+      }
+    } finally {
+      _isRestoringWindow = false;
+    }
   }
 
   /// Intercepts the window close action and hides to tray.

@@ -1,5 +1,7 @@
 import 'package:meta/meta.dart';
 
+import 'model_registry_dto.dart';
+
 /// DTO representing runtime model status from GET /api/v1/models.
 ///
 /// Phase 3 Truthful Telemetry Contract:
@@ -23,11 +25,16 @@ class ModelStatusResponse {
   final bool modelLoaded;
   final bool modelAwake;
   final String requestedProfile;
+  final String requestedContextMode;
+  final List<ContextOptionAssessmentOut> contextOptions;
   final String? appliedProfile;
   final int? appliedContextSize;
   final int? appliedGpuLayers;
   final bool requestedMmprojOffload;
   final bool? appliedMmprojOffload;
+  final String? hostGpuName;
+  final double? hostVramGb;
+  final double? hostRamGb;
   final bool generationActive;
   final String? lastRuntimeError;
   final bool mmprojOffload;
@@ -53,11 +60,16 @@ class ModelStatusResponse {
     this.modelLoaded = false,
     this.modelAwake = false,
     this.requestedProfile = 'balanced',
+    this.requestedContextMode = 'profile',
+    this.contextOptions = const [],
     this.appliedProfile,
     this.appliedContextSize,
     this.appliedGpuLayers,
     this.requestedMmprojOffload = true,
     this.appliedMmprojOffload,
+    this.hostGpuName,
+    this.hostVramGb,
+    this.hostRamGb,
     this.generationActive = false,
     this.lastRuntimeError,
     this.mmprojOffload = true,
@@ -94,6 +106,16 @@ class ModelStatusResponse {
       parsedRegistry = null;
     }
 
+    final contextOptionsRaw = json['context_options'];
+    final List<ContextOptionAssessmentOut> parsedContextOptions;
+    if (contextOptionsRaw is List) {
+      parsedContextOptions = contextOptionsRaw
+          .map((e) => ContextOptionAssessmentOut.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    } else {
+      parsedContextOptions = const [];
+    }
+
     return ModelStatusResponse(
       provider: providerVal,
       engineVersion: json['engine_version'] as String? ?? 'b10936',
@@ -106,11 +128,16 @@ class ModelStatusResponse {
       modelLoaded: json['model_loaded'] as bool? ?? false,
       modelAwake: json['model_awake'] as bool? ?? false,
       requestedProfile: json['requested_profile'] as String? ?? 'balanced',
+      requestedContextMode: json['requested_context_mode'] as String? ?? 'profile',
+      contextOptions: parsedContextOptions,
       appliedProfile: json['applied_profile'] as String?,
       appliedContextSize: json['applied_context_size'] as int?,
       appliedGpuLayers: json['applied_gpu_layers'] as int?,
       requestedMmprojOffload: json['requested_mmproj_offload'] as bool? ?? true,
       appliedMmprojOffload: json['applied_mmproj_offload'] as bool?,
+      hostGpuName: json['host_gpu_name'] as String?,
+      hostVramGb: (json['host_vram_gb'] as num?)?.toDouble(),
+      hostRamGb: (json['host_ram_gb'] as num?)?.toDouble(),
       generationActive: json['generation_active'] as bool? ?? false,
       lastRuntimeError: json['last_runtime_error'] as String?,
       mmprojOffload: json['mmproj_offload'] as bool? ?? true,
@@ -138,11 +165,16 @@ class ModelStatusResponse {
         'model_loaded': modelLoaded,
         'model_awake': modelAwake,
         'requested_profile': requestedProfile,
+        'requested_context_mode': requestedContextMode,
+        'context_options': contextOptions.map((c) => c.toJson()).toList(),
         if (appliedProfile != null) 'applied_profile': appliedProfile,
         if (appliedContextSize != null) 'applied_context_size': appliedContextSize,
         if (appliedGpuLayers != null) 'applied_gpu_layers': appliedGpuLayers,
         'requested_mmproj_offload': requestedMmprojOffload,
         if (appliedMmprojOffload != null) 'applied_mmproj_offload': appliedMmprojOffload,
+        if (hostGpuName != null) 'host_gpu_name': hostGpuName,
+        if (hostVramGb != null) 'host_vram_gb': hostVramGb,
+        if (hostRamGb != null) 'host_ram_gb': hostRamGb,
         'generation_active': generationActive,
         if (lastRuntimeError != null) 'last_runtime_error': lastRuntimeError,
         'mmproj_offload': mmprojOffload,
@@ -173,11 +205,15 @@ class ModelStatusResponse {
           modelLoaded == other.modelLoaded &&
           modelAwake == other.modelAwake &&
           requestedProfile == other.requestedProfile &&
+          requestedContextMode == other.requestedContextMode &&
           appliedProfile == other.appliedProfile &&
           appliedContextSize == other.appliedContextSize &&
           appliedGpuLayers == other.appliedGpuLayers &&
           requestedMmprojOffload == other.requestedMmprojOffload &&
           appliedMmprojOffload == other.appliedMmprojOffload &&
+          hostGpuName == other.hostGpuName &&
+          hostVramGb == other.hostVramGb &&
+          hostRamGb == other.hostRamGb &&
           generationActive == other.generationActive &&
           lastRuntimeError == other.lastRuntimeError &&
           mmprojOffload == other.mmprojOffload &&
@@ -200,11 +236,15 @@ class ModelStatusResponse {
         modelLoaded,
         modelAwake,
         requestedProfile,
+        requestedContextMode,
         appliedProfile,
         appliedContextSize,
         appliedGpuLayers,
         requestedMmprojOffload,
         appliedMmprojOffload,
+        hostGpuName,
+        hostVramGb,
+        hostRamGb,
         generationActive,
         lastRuntimeError,
         mmprojOffload,

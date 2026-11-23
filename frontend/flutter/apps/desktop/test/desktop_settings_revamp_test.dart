@@ -469,6 +469,12 @@ void main() {
       await tester.pumpAndSettle();
       expect(fakeClient.registryCalls, equals(initialCalls + 1));
 
+      // Expand Advanced diagnostics when connected before accessing pairing token field
+      final advToggle = find.byKey(const Key('runtime_advanced_toggle'));
+      await tester.ensureVisible(advToggle);
+      await tester.tap(advToggle);
+      await tester.pumpAndSettle();
+
       // Clear pairing token (marks dirty), switch away and back -> cleared token is not overwritten
       final tokenField = find.byKey(const Key('runtime_pairing_token_input'));
       await tester.enterText(tokenField, '');

@@ -1,7 +1,7 @@
 """Schemas for health checks and host system telemetry."""
 
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 from pydantic import Field
 
 from app.schemas.common import BaseSchema
@@ -48,3 +48,62 @@ class SystemShutdownResponse(BaseSchema):
     already_shutting_down: bool = Field(default=False, description="Whether shutdown was already in progress.")
     shutdown_phase: Optional[str] = Field(default=None, description="Current phase of shutdown lifecycle.")
     message: str = Field(default="Cooperative shutdown initiated.", description="Informational message.")
+
+
+class StorageRootOut(BaseSchema):
+    """Live telemetry descriptor for one of the five canonical host storage roots."""
+
+    key: str = Field(..., description="Canonical root identifier: app_install, data, library, cache, or log.")
+    label: str = Field(..., description="Human-readable label for Settings UI.")
+    path: str = Field(..., description="Resolved absolute filesystem path.")
+    exists: bool = Field(..., description="Whether the directory currently exists on disk.")
+    free_bytes: Optional[int] = Field(default=None, description="Free space in bytes on the backing volume.")
+    total_bytes: Optional[int] = Field(default=None, description="Total volume capacity in bytes.")
+    source: str = Field(..., description="Precedence source: 'env', 'bootstrap', or 'default'.")
+
+
+class StorageRootsResponse(BaseSchema):
+    """Host-Admin storage root telemetry across all five canonical roots (PC-HOST-004)."""
+
+    bootstrap_path: str = Field(..., description="Path to bootstrap.json locator file.")
+    library_root: str = Field(..., description="Active canonical LIBRARY_ROOT path.")
+    import_inbox_dir: str = Field(..., description="Active D6 manual model import inbox folder.")
+    library_relocatable: bool = Field(default=True, description="Whether LIBRARY_ROOT can currently be relocated.")
+    relocation_blocked_reason: Optional[str] = Field(
+        default=None,
+        description="Explanation when library relocation is temporarily unavailable.",
+    )
+    roots: List[StorageRootOut] = Field(..., description="All five canonical storage roots.")
+
+
+class LibraryRootUpdateRequest(BaseSchema):
+    """Request payload to relocate LIBRARY_ROOT atomically in bootstrap.json."""
+
+    new_library_root: str = Field(..., min_length=1, description="New absolute path for LIBRARY_ROOT.")
+    migrate_existing_assets: bool = Field(
+        default=True,
+        description="Copy existing models, registry, voices, and inbox files into the new LIBRARY_ROOT.",
+    )
+
+
+class AutostartStatusOut(BaseSchema):
+    """Windows Task Scheduler login autostart status (PC-HOST-002)."""
+
+    supported: bool = Field(..., description="True when running on supported Windows host platform.")
+    enabled: bool = Field(..., description="Whether login autostart is currently enabled/registered.")
+    task_registered: bool = Field(..., description="Live Windows Task Scheduler registration verification flag.")
+    task_name: str = Field(..., description="Canonical Windows Task Scheduler task name.")
+    minimized_to_tray: bool = Field(default=True, description="Whether autostart launches silently to system tray.")
+    command: Optional[str] = Field(default=None, description="Registered executable command and arguments.")
+    working_directory: Optional[str] = Field(default=None, description="Registered task working directory.")
+    status_detail: str = Field(..., description="Human-readable registration or platform status detail.")
+
+
+class AutostartUpdateRequest(BaseSchema):
+    """Request to enable or disable standard-user Windows login autostart."""
+
+    enabled: bool = Field(..., description="Enable or disable Task Scheduler login autostart.")
+    minimized_to_tray: bool = Field(
+        default=True,
+        description="Launch minimized to system tray without initial window flash.",
+    )

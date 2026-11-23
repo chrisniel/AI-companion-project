@@ -140,3 +140,98 @@ class ModelRegistryEntry(BaseSchema):
     hints: ModelRuntimeHints
     runtime_model_id: str = ""
     registry_source: Literal["factory", "installed"] = "factory"
+
+
+class ContextOptionAssessmentOut(BaseSchema):
+    """Availability and resource guardrail assessment for a selectable context window."""
+    mode: Literal["profile", "2k", "4k", "8k", "16k", "32k", "model_max"]
+    label: str
+    context_tokens: int
+    estimated_vram_gb: float
+    status: Literal["good_fit", "tight", "blocked"]
+    selectable: bool
+    exceeds_model_max: bool = False
+    reason: str
+
+
+class InboxMmprojOut(BaseSchema):
+    """Valid mmproj vision projector GGUF discovered inside IMPORT_INBOX_DIR."""
+    relative_path: str
+    filename: str
+    size_gb: float
+    model_name: str = ""
+    projector_type: str = ""
+    vision_projection_dim: Optional[int] = None
+
+
+class PreflightAssessmentOut(BaseSchema):
+    """Advisory hardware/VRAM suitability preflight assessment (runtime-and-models §2.8)."""
+    status: Literal["recommended", "supported_with_warning", "not_recommended"]
+    estimated_vram_gb: float
+    host_dedicated_vram_gb: float
+    recommended_profile: Literal["eco", "balanced", "maximum"]
+    message: str
+
+
+class ModelImportCandidateOut(BaseSchema):
+    """Scanned GGUF candidate bundle discovered in IMPORT_INBOX_DIR."""
+    relative_path: str
+    primary_filename: str
+    suggested_model_id: str
+    display_name: str
+    file_size_bytes: int
+    size_gb: float
+    artifact_valid: bool
+    validation_error: Optional[str] = None
+    architecture: str = ""
+    quantization: str = ""
+    parameters: str = ""
+    variant: str = "unknown"
+    family: str = ""
+    license: str = ""
+    model_max_context: Optional[int] = None
+    has_chat_template: bool = False
+    has_vision_projector: bool = False
+    expects_vision_projector: bool = False
+    reasoning_mode: str = "unknown"
+    companion_mmproj_relative_path: Optional[str] = None
+    companion_mmproj_filename: Optional[str] = None
+    compatible_mmproj_paths: List[str] = Field(default_factory=list)
+    detected_capabilities: List[str] = Field(default_factory=list)
+    context_options: List[ContextOptionAssessmentOut] = Field(default_factory=list)
+    preflight: PreflightAssessmentOut
+
+
+class ModelImportScanOut(BaseSchema):
+    """Result of manual D6 scan over IMPORT_INBOX_DIR."""
+    inbox_dir: str
+    candidates: List[ModelImportCandidateOut] = Field(default_factory=list)
+    available_mmprojs: List[InboxMmprojOut] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list)
+
+
+class ModelImportInstallRequest(BaseSchema):
+    """User-confirmed D6 install request for an inbox GGUF bundle."""
+    relative_path: str = Field(..., min_length=1)
+    companion_relative_path: Optional[str] = None
+    model_id: str = Field(..., min_length=2, max_length=64)
+    display_name: Optional[str] = None
+    variant: Optional[ModelVariant] = None
+    family: Optional[str] = None
+    license: Optional[str] = None
+    transfer_mode: Literal["move", "copy"] = "move"
+
+
+class ModelImportInstallOut(BaseSchema):
+    """Result of atomic D6 model installation into MODEL_LIBRARY_DIR and Schema v3 models.json."""
+    installed_id: str
+    display_name: str
+    primary_file: str
+    validation_status: str
+    sha256_primary: str
+
+
+class ModelDeleteOut(BaseSchema):
+    """Result of uninstalling a user-imported D6 model from MODEL_LIBRARY_DIR."""
+    deleted_id: str
+    message: str

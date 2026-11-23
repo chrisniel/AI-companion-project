@@ -1,8 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:companion_core/companion_core.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:ai_companion_desktop/coordinator/desktop_runtime_coordinator.dart';
 import 'package:ai_companion_desktop/lifecycle/desktop_lifecycle_coordinator.dart';
 import 'package:ai_companion_desktop/lifecycle/desktop_window_adapter.dart';
 import 'package:ai_companion_desktop/lifecycle/desktop_tray_adapter.dart';
@@ -448,6 +451,113 @@ void main() {
       coordinator.onTrayIconRightMouseDown();
       await pumpEventQueue();
       expect(trayAdapter.popUpContextMenuCount, equals(1));
+    });
+
+    test('showImmediately=false hides window when tray succeeds and restores if tray fails', () async {
+      await coordinator.initialize(showImmediately: false, maximizeOnStart: false);
+      expect(windowAdapter.visible, isFalse);
+      expect(windowAdapter.hideCallCount, equals(1));
+      expect(coordinator.isWindowVisible, isFalse);
+
+      // Fail-open when tray is unavailable so user never loses window access
+      final failingTray = FailingDesktopTrayAdapter();
+      final fallbackWindow = FakeDesktopWindowAdapter();
+      final robust = DesktopLifecycleCoordinator(
+        windowAdapter: fallbackWindow,
+        trayAdapter: failingTray,
+      );
+      await robust.initialize(showImmediately: false, maximizeOnStart: false);
+      expect(fallbackWindow.visible, isTrue);
+      expect(robust.isWindowVisible, isTrue);
+      await robust.dispose();
+    });
+
+    test('defers maximizeOnStart until first open when booted hidden to tray, and maximizes only once', () async {
+      await coordinator.initialize(showImmediately: false, maximizeOnStart: true);
+      expect(windowAdapter.visible, isFalse);
+      expect(windowAdapter.isMaximized, isFalse);
+      expect(windowAdapter.maximizeCallCount, equals(0));
+
+      // First open from tray maximizes once.
+      coordinator.onTrayIconMouseDown();
+      await pumpEventQueue();
+      expect(windowAdapter.visible, isTrue);
+      expect(windowAdapter.isMaximized, isTrue);
+      expect(windowAdapter.maximizeCallCount, equals(1));
+
+      // Subsequent hide/restore cycles preserve user sizing without re-maximizing.
+      coordinator.onWindowClose();
+      await pumpEventQueue();
+      expect(windowAdapter.visible, isFalse);
+
+      coordinator.onTrayIconMouseDown();
+      await pumpEventQueue();
+      expect(windowAdapter.visible, isTrue);
+      expect(windowAdapter.maximizeCallCount, equals(1));
+
+      // When tray is unavailable on startup, fail-open show still maximizes immediately.
+      final failingTray = FailingDesktopTrayAdapter();
+      final fallbackWindow = FakeDesktopWindowAdapter();
+      final robust = DesktopLifecycleCoordinator(
+        windowAdapter: fallbackWindow,
+        trayAdapter: failingTray,
+      );
+      await robust.initialize(showImmediately: false, maximizeOnStart: true);
+      expect(fallbackWindow.visible, isTrue);
+      expect(fallbackWindow.isMaximized, isTrue);
+      expect(fallbackWindow.maximizeCallCount, equals(1));
+      await robust.dispose();
+    });
+
+    test('DesktopRuntimeCoordinator discovers backend 9+ ancestor levels from deep runner path', () async {
+      final tempRoot = Directory.systemTemp.createTempSync('deep_runner_test_');
+      addTearDown(() => tempRoot.deleteSync(recursive: true));
+
+      final backendApp = Directory(
+        '${tempRoot.path}${Platform.pathSeparator}backend${Platform.pathSeparator}app',
+      )..createSync(recursive: true);
+      File('${backendApp.path}${Platform.pathSeparator}main.py').writeAsStringSync('# main');
+
+      final runnerDir = Directory(
+        '${tempRoot.path}${Platform.pathSeparator}frontend${Platform.pathSeparator}flutter'
+        '${Platform.pathSeparator}apps${Platform.pathSeparator}desktop${Platform.pathSeparator}build'
+        '${Platform.pathSeparator}windows${Platform.pathSeparator}x64${Platform.pathSeparator}runner'
+        '${Platform.pathSeparator}Debug',
+      )..createSync(recursive: true);
+
+      final resolvedWd = DesktopRuntimeCoordinator.resolveWorkingDirectoryFromBases([runnerDir]);
+      expect(resolvedWd, equals('${tempRoot.path}${Platform.pathSeparator}backend'));
+    });
+
+    test('onWindowRestored fires only when restoring hidden tray window, not on visible startup', () async {
+      var visibleStartupRestoredCount = 0;
+      coordinator.onWindowRestored = () => visibleStartupRestoredCount++;
+      await coordinator.initialize(showImmediately: true);
+      expect(visibleStartupRestoredCount, equals(0));
+
+      final hiddenWindow = FakeDesktopWindowAdapter();
+      final hiddenTray = FakeDesktopTrayAdapter();
+      final trayCoordinator = DesktopLifecycleCoordinator(
+        windowAdapter: hiddenWindow,
+        trayAdapter: hiddenTray,
+      );
+      var trayRestoredCount = 0;
+      trayCoordinator.onWindowRestored = () => trayRestoredCount++;
+
+      await trayCoordinator.initialize(
+        showImmediately: false,
+        maximizeOnStart: true,
+      );
+      expect(trayRestoredCount, equals(0));
+      expect(hiddenWindow.visible, isFalse);
+
+      trayCoordinator.onTrayIconMouseDown();
+      await pumpEventQueue();
+      expect(trayRestoredCount, equals(1));
+      expect(hiddenWindow.visible, isTrue);
+      expect(hiddenWindow.isMaximized, isTrue);
+
+      await trayCoordinator.dispose();
     });
   });
 }

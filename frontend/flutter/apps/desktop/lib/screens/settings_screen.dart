@@ -22,6 +22,7 @@ import '../features/tools/desktop_tool_policy_controller.dart';
 import '../features/voice/desktop_voice_controller.dart';
 import '../lifecycle/desktop_lifecycle_coordinator.dart';
 import '../platform/desktop_client_settings.dart';
+import '../platform/windows_shell_adapter.dart';
 
 /// Responsive two-column Settings workspace aligned with the Web UI
 /// categorized sidebar and truthful Planned vs. Available capability tabs.
@@ -39,6 +40,7 @@ class SettingsScreen extends StatefulWidget {
     this.scheduleController,
     this.toolPolicyController,
     this.voiceController,
+    this.shellAdapter,
   });
 
   final DesktopSettingsController controller;
@@ -52,6 +54,7 @@ class SettingsScreen extends StatefulWidget {
   final DesktopScheduleController? scheduleController;
   final DesktopToolPolicyController? toolPolicyController;
   final DesktopVoiceController? voiceController;
+  final DesktopShellAdapter? shellAdapter;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -196,6 +199,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       SettingsSectionId.general => SettingsGeneralSection(
           coordinator: widget.coordinator,
+          clientSettings: widget.clientSettings,
+          credentialStore: widget.credentialStore,
+          client: widget.client,
         ),
       SettingsSectionId.notifications => SettingsNotificationsSection(
           scheduleController: widget.scheduleController,
@@ -211,9 +217,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           clientSettings: widget.clientSettings,
           credentialStore: widget.credentialStore,
           client: widget.client,
+          shellAdapter: widget.shellAdapter,
         ),
       SettingsSectionId.storage => SettingsStorageSection(
           diagnosticReader: widget.controller.diagnosticReader,
+          controller: widget.controller,
+          clientSettings: widget.clientSettings,
+          credentialStore: widget.credentialStore,
+          client: widget.client,
+          shellAdapter: widget.shellAdapter,
         ),
       SettingsSectionId.tools => SettingsToolsSection(
           toolPolicyController: widget.toolPolicyController,

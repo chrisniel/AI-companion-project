@@ -88,6 +88,19 @@ M2_ROUTE_DART_METHODS: Dict[Tuple[str, str], Tuple[str, str]] = {
     ("POST", "/api/v1/profiles/{profile_id}/restore"): ("restoreProfile", "'profiles/$profileId/restore'"),
     ("POST", "/api/v1/profiles/{profile_id}/purge"): ("purgeProfile", "'profiles/$profileId/purge'"),
     ("POST", "/api/v1/system/maintenance/purge-profiles"): ("runPurgeMaintenance", "/api/v1/system/maintenance/purge-profiles"),
+    # M2 Batch E Storage Roots, Windows Autostart & Local Model Management routes
+    ("GET", "/api/v1/system/storage"): ("getStorageRoots", "/api/v1/system/storage"),
+    ("PUT", "/api/v1/system/storage/library-root"): ("relocateLibraryRoot", "/api/v1/system/storage/library-root"),
+    ("GET", "/api/v1/system/autostart"): ("getAutostartStatus", "/api/v1/system/autostart"),
+    ("PUT", "/api/v1/system/autostart"): ("updateAutostart", "/api/v1/system/autostart"),
+    ("GET", "/api/v1/models/registry"): ("getModelRegistry", "/api/v1/models/registry"),
+    ("POST", "/api/v1/models/select"): ("selectModel", "/api/v1/models/select"),
+    ("POST", "/api/v1/models/load"): ("loadModel", "/api/v1/models/load"),
+    ("POST", "/api/v1/models/unload"): ("unloadModel", "/api/v1/models/unload"),
+    ("PATCH", "/api/v1/models/profile"): ("updateModelProfile", "/api/v1/models/profile"),
+    ("POST", "/api/v1/models/import/scan"): ("scanModelImportInbox", "/api/v1/models/import/scan"),
+    ("POST", "/api/v1/models/import/install"): ("installModelFromInbox", "/api/v1/models/import/install"),
+    ("DELETE", "/api/v1/models/registry/{model_id}"): ("deleteInstalledModel", "/api/v1/models/registry/${Uri.encodeComponent(modelId)}"),
 }
 
 # Character foundation routes delivered in M3 Character Foundation (PC-CHAR-001, PC-CHAR-005).
@@ -161,11 +174,6 @@ M3_ROUTE_DART_METHODS: Dict[Tuple[str, str], Tuple[str, str]] = {
 UNMAPPED_FUTURE_ROUTES: Dict[Tuple[str, str], str] = {
     ("POST", "/api/v1/auth/session/claim"): "M2 browser-only authorization initiation",
     ("GET", "/api/v1/profiles/{profile_id}"): "M2 scoped metadata; native client uses session/me",
-    ("GET", "/api/v1/models/registry"): "M2/M3 Model Registry & Downloader",
-    ("POST", "/api/v1/models/select"): "M2/M3 Model Selection Management",
-    ("POST", "/api/v1/models/load"): "M2/M3 Model Lifecycle Management",
-    ("POST", "/api/v1/models/unload"): "M2/M3 Model Lifecycle Management",
-    ("PATCH", "/api/v1/models/profile"): "M2/M3 Model Profile Tuning",
     ("POST", "/api/v1/chat/completions"): "M2/M3 OpenAI Compatibility Endpoint",
     ("POST", "/api/v1/conversations/{conversation_id}/attachments"): "M2 Attachment Ingestion",
     ("GET", "/api/v1/conversations/{conversation_id}/attachments/{attachment_id}/preview"): "M2 Attachment Preview",
@@ -263,6 +271,20 @@ SCHEMA_TO_DART_CLASS: Dict[str, Tuple[str, str]] = {
     "VoiceTranscribeOut": ("voice_dto.dart", "VoiceTranscribeOut"),
     "VoiceSynthesizeRequest": ("voice_dto.dart", "VoiceSynthesizeRequest"),
     "VoiceSynthesizeOut": ("voice_dto.dart", "VoiceSynthesizeOut"),
+    # M2 Batch E Storage Roots, Windows Autostart & D6 Model Import DTOs
+    "StorageRootOut": ("system_status_dto.dart", "StorageRootOut"),
+    "StorageRootsResponse": ("system_status_dto.dart", "StorageRootsResponse"),
+    "LibraryRootUpdateRequest": ("system_status_dto.dart", "LibraryRootUpdateRequest"),
+    "AutostartStatusOut": ("system_status_dto.dart", "AutostartStatusOut"),
+    "AutostartUpdateRequest": ("system_status_dto.dart", "AutostartUpdateRequest"),
+    "ContextOptionAssessmentOut": ("model_registry_dto.dart", "ContextOptionAssessmentOut"),
+    "InboxMmprojOut": ("model_registry_dto.dart", "InboxMmprojOut"),
+    "PreflightAssessmentOut": ("model_registry_dto.dart", "PreflightAssessmentOut"),
+    "ModelImportCandidateOut": ("model_registry_dto.dart", "ModelImportCandidateOut"),
+    "ModelImportScanOut": ("model_registry_dto.dart", "ModelImportScanOut"),
+    "ModelImportInstallRequest": ("model_registry_dto.dart", "ModelImportInstallRequest"),
+    "ModelImportInstallOut": ("model_registry_dto.dart", "ModelImportInstallOut"),
+    "ModelDeleteOut": ("model_registry_dto.dart", "ModelDeleteOut"),
 }
 
 

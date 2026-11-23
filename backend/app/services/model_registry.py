@@ -8,7 +8,7 @@ Never writes to repository models/ directory or mutates model weights.
 """
 import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 import struct
 from typing import Any, Dict, List, Literal, Optional, Tuple
@@ -40,6 +40,22 @@ _MIN_SIZE_BYTES = 100 * 1024 * 1024
 MAX_METADATA_KV_COUNT = 256
 MAX_STRING_LENGTH = 1024
 MAX_ARRAY_LENGTH = 64
+MAX_SKIP_ARRAY_LENGTH = 1_000_000
+MAX_CHAT_TEMPLATE_LENGTH = 65_536
+
+_GGUF_SCALAR_SIZES: Dict[int, int] = {
+    0: 1,   # UINT8
+    1: 1,   # INT8
+    2: 2,   # UINT16
+    3: 2,   # INT16
+    4: 4,   # UINT32
+    5: 4,   # INT32
+    6: 4,   # FLOAT32
+    7: 1,   # BOOL
+    10: 8,  # UINT64
+    11: 8,  # INT64
+    12: 8,  # FLOAT64
+}
 
 # Standard GGUF file_type (llama_ftype from include/llama.h at llama.cpp b10936)
 GGUF_FILE_TYPE_MAP: Dict[int, str] = {
@@ -89,7 +105,115 @@ class GGUFMetadata:
     context_length: Optional[int] = None
     quantization: str = ""
     quantization_version: Optional[int] = None
+    general_type: str = ""
+    model_name: str = ""
+    size_label: str = ""
+    license_name: str = ""
+    has_chat_template: bool = False
+    has_vision_encoder: bool = False
+    has_audio_encoder: bool = False
+    embedding_length: Optional[int] = None
+    projector_type: str = ""
+    vision_projection_dim: Optional[int] = None
+    basename: str = ""
+    tags: List[str] = field(default_factory=list)
+    reasoning_mode: str = "unknown"
     raw_metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+_VISION_PRIMARY_ARCHITECTURES = {
+    "qwen3vl",
+    "qwen2vl",
+    "qwen25vl",
+    "gemma3",
+    "gemma4",
+    "llava",
+    "internvl",
+    "minicpmv",
+    "pixtral",
+    "mllama",
+    "mistral3",
+}
+_VISION_TAGS = {
+    "image-text-to-text",
+    "any-to-any",
+    "vision",
+    "multimodal",
+    "visual-question-answering",
+}
+
+
+def _infer_reasoning_from_chat_template(template: str) -> str:
+    """Detect reasoning mode from bounded tokenizer.chat_template without keeping raw text."""
+    t = (template or "").lower()
+    if not t:
+        return "unknown"
+    if "enable_thinking" in t:
+        return ReasoningMode.toggleable.value
+    if any(m in t for m in ("<think>", "<|thought|>", "<thought>", "<|begin_of_thought|>")):
+        return ReasoningMode.always_on.value
+    return ReasoningMode.unsupported.value
+
+
+def _infer_reasoning_from_name(name_text: str) -> str:
+    """Fallback reasoning heuristic for template-less GGUF files."""
+    low = (name_text or "").lower()
+    if any(tok in low for tok in ("thinking", "deepseek-r1", "-r1-", "-r1", "qwq", "reasoner")):
+        return ReasoningMode.always_on.value
+    return "unknown"
+
+
+def is_vision_capable_primary(meta: GGUFMetadata) -> bool:
+    """Return True if primary GGUF metadata or architecture indicates multimodal vision support."""
+    if meta.has_vision_encoder:
+        return True
+    if any(tag in _VISION_TAGS for tag in meta.tags):
+        return True
+    arch = (meta.architecture or "").strip().lower()
+    return arch in _VISION_PRIMARY_ARCHITECTURES
+
+
+_STRUCT_U64 = struct.Struct("<Q")
+_GGUF_METADATA_CACHE: Dict[Tuple[str, int, int], GGUFMetadata] = {}
+
+
+def _seek_forward_bounded(f, skip_bytes: int, file_size: int) -> None:
+    if skip_bytes < 0:
+        raise ValueError(f"Negative GGUF seek offset: {skip_bytes}")
+    pos = f.tell()
+    if pos + skip_bytes > file_size:
+        raise EOFError(f"GGUF skip offset {pos + skip_bytes} exceeds file size {file_size}")
+    f.seek(pos + skip_bytes)
+
+
+def _skip_gguf_array(f, file_size: int) -> None:
+    elem_type = struct.unpack("<I", _read_exact(f, 4))[0]
+    if elem_type == 9:
+        raise ValueError("Nested arrays are not supported in GGUF metadata")
+    (arr_len,) = struct.unpack("<Q", _read_exact(f, 8))
+    if arr_len < 0 or arr_len > MAX_SKIP_ARRAY_LENGTH:
+        raise ValueError(f"Skippable GGUF array length {arr_len} outside bounds [0, {MAX_SKIP_ARRAY_LENGTH}]")
+    if elem_type in _GGUF_SCALAR_SIZES:
+        _seek_forward_bounded(f, arr_len * _GGUF_SCALAR_SIZES[elem_type], file_size)
+        return
+    if elem_type == 8:
+        f_read = f.read
+        unpack_u64 = _STRUCT_U64.unpack
+        for _ in range(arr_len):
+            raw_len = f_read(8)
+            if len(raw_len) < 8:
+                raise EOFError("Unexpected EOF reading GGUF array string length")
+            (slen,) = unpack_u64(raw_len)
+            if slen < 0 or slen > MAX_CHAT_TEMPLATE_LENGTH:
+                raise ValueError(f"Array element string length {slen} outside bounds")
+            if slen <= 65536:
+                data = f_read(slen)
+                if len(data) < slen:
+                    raise EOFError("Unexpected EOF skipping GGUF array string")
+            else:
+                _seek_forward_bounded(f, slen, file_size)
+        return
+    raise ValueError(f"Unsupported GGUF array element type: {elem_type}")
 
 
 def _read_exact(f, n: int) -> bytes:
@@ -159,7 +283,17 @@ def read_gguf_metadata(path: Path) -> GGUFMetadata:
         return result
 
     try:
-        with open(path, "rb") as f:
+        st = path.stat()
+        file_size = st.st_size
+        cache_key = (str(path), file_size, st.st_mtime_ns) if file_size >= 65536 else None
+        if cache_key is not None and cache_key in _GGUF_METADATA_CACHE:
+            cached = _GGUF_METADATA_CACHE[cache_key]
+            return replace(
+                cached,
+                tags=list(cached.tags),
+                raw_metadata=dict(cached.raw_metadata),
+            )
+        with open(path, "rb", buffering=256 * 1024) as f:
             magic = f.read(4)
             if magic != b"GGUF":
                 return result
@@ -181,20 +315,79 @@ def read_gguf_metadata(path: Path) -> GGUFMetadata:
             for _ in range(kv_count):
                 key = _read_gguf_string(f)
                 val_type = struct.unpack("<I", _read_exact(f, 4))[0]
+                if val_type == 9 and key.startswith("tokenizer.ggml."):
+                    _skip_gguf_array(f, file_size)
+                    continue
+                if val_type == 8 and key == "tokenizer.chat_template":
+                    (slen,) = struct.unpack("<Q", _read_exact(f, 8))
+                    if slen < 0 or slen > MAX_CHAT_TEMPLATE_LENGTH:
+                        raise ValueError(
+                            f"tokenizer.chat_template length {slen} outside bounds [0, {MAX_CHAT_TEMPLATE_LENGTH}]"
+                        )
+                    pos = f.tell()
+                    if pos + slen > file_size:
+                        raise EOFError(
+                            f"GGUF chat_template offset {pos + slen} exceeds file size {file_size}"
+                        )
+                    if slen > 0:
+                        result.has_chat_template = True
+                        tmpl_bytes = _read_exact(f, slen)
+                        result.reasoning_mode = _infer_reasoning_from_chat_template(
+                            tmpl_bytes.decode("utf-8", errors="replace")
+                        )
+                    continue
                 val = _read_gguf_value(f, val_type)
                 raw_metadata[key] = val
 
             result.raw_metadata = raw_metadata
 
-            # 1. Architecture
+            # 1. Architecture & extended general metadata
             arch = raw_metadata.get("general.architecture")
             if isinstance(arch, str) and arch:
                 result.architecture = arch
-                # 2. Dynamic context length: <architecture>.context_length
                 ctx_key = f"{arch}.context_length"
                 ctx_val = raw_metadata.get(ctx_key)
-                if isinstance(ctx_val, int) and ctx_val > 0:
+                if isinstance(ctx_val, int) and not isinstance(ctx_val, bool) and ctx_val > 0:
                     result.context_length = ctx_val
+                emb_key = f"{arch}.embedding_length"
+                emb_val = raw_metadata.get(emb_key)
+                if isinstance(emb_val, int) and not isinstance(emb_val, bool) and emb_val > 0:
+                    result.embedding_length = emb_val
+
+            gtype = raw_metadata.get("general.type")
+            if isinstance(gtype, str):
+                result.general_type = gtype
+            gname = raw_metadata.get("general.name")
+            if isinstance(gname, str):
+                result.model_name = gname
+            gbase = raw_metadata.get("general.basename")
+            if isinstance(gbase, str):
+                result.basename = gbase
+            slabel = raw_metadata.get("general.size_label")
+            if isinstance(slabel, str):
+                result.size_label = slabel
+            glic = raw_metadata.get("general.license")
+            if isinstance(glic, str):
+                result.license_name = glic
+            raw_tags = raw_metadata.get("general.tags")
+            if isinstance(raw_tags, list):
+                result.tags = [
+                    str(t).strip().lower()
+                    for t in raw_tags
+                    if isinstance(t, str) and str(t).strip()
+                ]
+            clip_vision = raw_metadata.get("clip.has_vision_encoder")
+            if isinstance(clip_vision, bool):
+                result.has_vision_encoder = clip_vision
+            clip_audio = raw_metadata.get("clip.has_audio_encoder")
+            if isinstance(clip_audio, bool):
+                result.has_audio_encoder = clip_audio
+            proj_type = raw_metadata.get("clip.projector_type")
+            if isinstance(proj_type, str):
+                result.projector_type = proj_type
+            proj_dim = raw_metadata.get("clip.vision.projection_dim")
+            if isinstance(proj_dim, int) and not isinstance(proj_dim, bool) and proj_dim > 0:
+                result.vision_projection_dim = proj_dim
 
             # 3. Quantization from general.file_type ONLY (llama.cpp b10936 llama_ftype mapping)
             ftype = raw_metadata.get("general.file_type")
@@ -206,11 +399,345 @@ def read_gguf_metadata(path: Path) -> GGUFMetadata:
             if isinstance(qver, int):
                 result.quantization_version = qver
 
+            if result.reasoning_mode == "unknown":
+                result.reasoning_mode = _infer_reasoning_from_name(
+                    f"{path.name} {result.model_name} {result.basename}"
+                )
+
+            if cache_key is not None:
+                _GGUF_METADATA_CACHE[cache_key] = replace(
+                    result,
+                    tags=list(result.tags),
+                    raw_metadata=dict(result.raw_metadata),
+                )
+
     except Exception as exc:
         logger.debug(f"GGUF header inspection error on {path.name}: {exc}")
         return result
 
     return result
+
+
+def _estimate_kv_overhead_gb(context_tokens: int) -> float:
+    if context_tokens <= 2048:
+        return 0.45
+    if context_tokens <= 4096:
+        return 0.85
+    if context_tokens <= 8192:
+        return 1.75
+    if context_tokens <= 16384:
+        return 3.3
+    if context_tokens <= 32768:
+        return 5.8
+    return round(min(12.0, 5.8 + (context_tokens - 32768) / 8192 * 1.4), 2)
+
+
+EXPLICIT_CONTEXT_TOKENS: Dict[str, int] = {
+    "2k": 2048,
+    "4k": 4096,
+    "8k": 8192,
+    "16k": 16384,
+    "32k": 32768,
+}
+
+
+def resolve_context_size_for_mode(
+    base_ctx: int,
+    context_mode: str,
+    model_max_context: Optional[int] = None,
+) -> int:
+    """Resolve effective n_ctx for a profile default or explicit context_mode."""
+    mode = (context_mode or "profile").strip().lower()
+    safe_max = (
+        model_max_context
+        if isinstance(model_max_context, int)
+        and not isinstance(model_max_context, bool)
+        and model_max_context > 0
+        else None
+    )
+    if mode in EXPLICIT_CONTEXT_TOKENS:
+        target = EXPLICIT_CONTEXT_TOKENS[mode]
+        return min(target, safe_max) if safe_max is not None else target
+    if mode == "model_max":
+        return min(safe_max, 131072) if safe_max is not None else 32768
+    return min(base_ctx, safe_max) if safe_max is not None else base_ctx
+
+
+def assess_hardware_suitability(
+    file_size_bytes: int,
+    architecture: str = "",
+    dedicated_vram_gb: Optional[float] = None,
+    companion_size_bytes: int = 0,
+    context_size: Optional[int] = None,
+    total_ram_gb: Optional[float] = None,
+):
+    """Advisory VRAM/hardware preflight assessment (runtime-and-models.md §2.8)."""
+    from app.schemas.model_registry import PreflightAssessmentOut
+    from app.services.hardware_probe import probe_host_hardware
+
+    hw = None
+    if dedicated_vram_gb is None or total_ram_gb is None:
+        hw = probe_host_hardware()
+    vram_budget = float(
+        dedicated_vram_gb if dedicated_vram_gb is not None else hw.dedicated_vram_gb
+    )
+
+    weights_gb = max(0.0, float(file_size_bytes + companion_size_bytes)) / (1024 ** 3)
+    os_reserve_gb = max(1.2, vram_budget * 0.15)
+    usable_vram_gb = max(0.0, vram_budget - os_reserve_gb)
+
+    ctx = context_size or 4096
+    kv_overhead_gb = _estimate_kv_overhead_gb(ctx)
+    estimated_vram_gb = round(weights_gb * 1.15 + kv_overhead_gb, 2)
+    est_max_gb = round(weights_gb * 1.15 + 1.75, 2)
+
+    if estimated_vram_gb <= usable_vram_gb * 0.78:
+        status: Literal["recommended", "supported_with_warning", "not_recommended"] = "recommended"
+        if est_max_gb <= usable_vram_gb * 0.65 and (vram_budget >= 12.0 or weights_gb <= 1.2):
+            profile: Literal["eco", "balanced", "maximum"] = "maximum"
+        else:
+            profile = "balanced"
+        message = (
+            f"Fits comfortably on {vram_budget:.1f} GB GPU "
+            f"(~{estimated_vram_gb:.1f} GB est. VRAM; ~{usable_vram_gb:.1f} GB usable after OS reserve)."
+        )
+    elif estimated_vram_gb <= usable_vram_gb:
+        status = "supported_with_warning"
+        profile = "balanced"
+        message = (
+            f"Tight fit on {vram_budget:.1f} GB GPU (~{estimated_vram_gb:.1f} GB est. VRAM vs "
+            f"~{usable_vram_gb:.1f} GB usable); Balanced recommended."
+        )
+    else:
+        status = "not_recommended"
+        profile = "eco"
+        message = (
+            f"Needs ~{estimated_vram_gb:.1f} GB VRAM, exceeding ~{usable_vram_gb:.1f} GB usable on "
+            f"{vram_budget:.1f} GB GPU; Eco (CPU offload) recommended to avoid RAM spillover."
+        )
+
+    return PreflightAssessmentOut(
+        status=status,
+        estimated_vram_gb=estimated_vram_gb,
+        host_dedicated_vram_gb=round(vram_budget, 2),
+        recommended_profile=profile,
+        message=message,
+    )
+
+
+def compute_recommended_profiles_for_model(
+    file_size_bytes: int,
+    companion_size_bytes: int = 0,
+    fallback_vram_gb: float = 0.0,
+    dedicated_vram_gb: Optional[float] = None,
+) -> Tuple[List[str], float]:
+    """Derive PC-aware ordered recommended profiles and est. VRAM for a model entry."""
+    effective_bytes = file_size_bytes
+    if effective_bytes <= 0 and fallback_vram_gb > 0.0:
+        # Approximate GGUF+companion weights from template VRAM hint when weights aren't on disk
+        effective_bytes = int(max(0.5, fallback_vram_gb * 0.85) * (1024 ** 3))
+
+    balanced = assess_hardware_suitability(
+        effective_bytes,
+        dedicated_vram_gb=dedicated_vram_gb,
+        companion_size_bytes=companion_size_bytes,
+        context_size=4096,
+    )
+    maximum = assess_hardware_suitability(
+        effective_bytes,
+        dedicated_vram_gb=dedicated_vram_gb,
+        companion_size_bytes=companion_size_bytes,
+        context_size=8192,
+    )
+
+    ordered: List[str] = []
+    if balanced.status == "not_recommended":
+        ordered = ["eco"]
+    else:
+        ordered.append("balanced")
+        if maximum.status == "recommended":
+            ordered.append("maximum")
+        elif balanced.status == "supported_with_warning":
+            ordered.append("eco")
+    return ordered, balanced.estimated_vram_gb
+
+
+def assess_context_options(
+    file_size_bytes: int,
+    *,
+    companion_size_bytes: int = 0,
+    profile: str = "balanced",
+    model_max_context: Optional[int] = None,
+    dedicated_vram_gb: Optional[float] = None,
+    total_ram_gb: Optional[float] = None,
+    fallback_vram_gb: float = 0.0,
+):
+    """Evaluate all selectable CTX modes against PC hardware and model limits."""
+    from app.schemas.model_registry import ContextOptionAssessmentOut
+    from app.services.hardware_probe import probe_host_hardware
+
+    hw = None
+    if dedicated_vram_gb is None or total_ram_gb is None:
+        hw = probe_host_hardware()
+    vram_budget = float(
+        dedicated_vram_gb if dedicated_vram_gb is not None else hw.dedicated_vram_gb
+    )
+    ram_budget = float(total_ram_gb if total_ram_gb is not None else hw.total_ram_gb)
+
+    effective_bytes = file_size_bytes
+    if effective_bytes <= 0 and fallback_vram_gb > 0.0:
+        effective_bytes = int(max(0.5, fallback_vram_gb * 0.85) * (1024 ** 3))
+
+    weights_gb = max(0.0, float(effective_bytes + max(0, companion_size_bytes))) / (1024 ** 3)
+    os_reserve_gb = max(1.2, vram_budget * 0.15)
+    usable_vram_gb = max(0.0, vram_budget - os_reserve_gb)
+
+    safe_max = (
+        model_max_context
+        if isinstance(model_max_context, int)
+        and not isinstance(model_max_context, bool)
+        and model_max_context > 0
+        else None
+    )
+    p = (profile or "balanced").strip().lower()
+    profile_default_ctx = {"eco": 2048, "balanced": 4096, "maximum": 8192}.get(p, 4096)
+    if safe_max is not None and profile_default_ctx > safe_max:
+        profile_default_ctx = safe_max
+    model_max_tokens = min(safe_max, 131072) if safe_max is not None else 32768
+
+    def _ctx_label(mode_key: str, tokens: int) -> str:
+        if mode_key == "profile":
+            k_str = f"{tokens // 1024}K" if tokens % 1024 == 0 else f"{tokens:,}"
+            return f"Auto ({p.capitalize()} · {k_str})"
+        if mode_key == "model_max":
+            if safe_max is not None:
+                k_str = (
+                    f"{model_max_tokens // 1024}K"
+                    if model_max_tokens % 1024 == 0
+                    else f"{model_max_tokens:,}"
+                )
+                return f"Model Max ({k_str})"
+            return "Model Max (32K+)"
+        return {
+            "2k": "2K (2,048)",
+            "4k": "4K (4,096)",
+            "8k": "8K (8,192)",
+            "16k": "16K (16,384)",
+            "32k": "32K (32,768)",
+        }[mode_key]
+
+    specs = [
+        ("profile", profile_default_ctx),
+        ("2k", 2048),
+        ("4k", 4096),
+        ("8k", 8192),
+        ("16k", 16384),
+        ("32k", 32768),
+        ("model_max", model_max_tokens),
+    ]
+
+    options: List[ContextOptionAssessmentOut] = []
+    for mode_key, tokens in specs:
+        kv_gb = _estimate_kv_overhead_gb(tokens)
+        est_gb = round(weights_gb * 1.15 + kv_gb, 2)
+        exceeds_max = bool(
+            mode_key != "profile" and safe_max is not None and tokens > safe_max
+        )
+        if exceeds_max:
+            status: Literal["good_fit", "tight", "blocked"] = "blocked"
+            selectable = False
+            reason = f"Exceeds model limit ({safe_max:,} tokens max)."
+        elif p == "eco":
+            if est_gb <= ram_budget * 0.72:
+                status = "good_fit"
+                selectable = True
+                reason = (
+                    f"Fits system RAM (~{est_gb:.1f} GB of {ram_budget:.1f} GB RAM; Eco CPU offload)."
+                )
+            elif est_gb <= ram_budget * 0.85:
+                status = "tight"
+                selectable = True
+                reason = (
+                    f"Tight fit in system RAM (~{est_gb:.1f} GB of {ram_budget:.1f} GB RAM); slower on CPU."
+                )
+            else:
+                status = "blocked"
+                selectable = mode_key == "profile"
+                reason = (
+                    f"Memory overflow risk (~{est_gb:.1f} GB needed vs {ram_budget:.1f} GB RAM)."
+                )
+        else:
+            if est_gb <= usable_vram_gb * 0.78:
+                status = "good_fit"
+                selectable = True
+                reason = (
+                    f"Good fit (~{est_gb:.1f} GB of ~{usable_vram_gb:.1f} GB usable GPU VRAM)."
+                )
+            elif est_gb <= usable_vram_gb:
+                status = "tight"
+                selectable = True
+                reason = (
+                    f"Tight GPU fit (~{est_gb:.1f} GB of ~{usable_vram_gb:.1f} GB usable); may slow down."
+                )
+            else:
+                status = "blocked"
+                selectable = mode_key == "profile"
+                reason = (
+                    f"Overflow risk on {vram_budget:.1f} GB GPU (~{est_gb:.1f} GB needed vs ~{usable_vram_gb:.1f} GB usable)."
+                )
+
+        options.append(
+            ContextOptionAssessmentOut(
+                mode=mode_key,  # type: ignore[arg-type]
+                label=_ctx_label(mode_key, tokens),
+                context_tokens=tokens,
+                estimated_vram_gb=est_gb,
+                status=status,
+                selectable=selectable,
+                exceeds_model_max=exceeds_max,
+                reason=reason,
+            )
+        )
+    return options
+
+
+def assess_context_options_for_entry(
+    entry: Optional[ModelRegistryEntry],
+    *,
+    profile: str = "balanced",
+    dedicated_vram_gb: Optional[float] = None,
+    total_ram_gb: Optional[float] = None,
+):
+    """Resolve model footprint from a ModelRegistryEntry and return assess_context_options()."""
+    primary_bytes = 0
+    companion_bytes = 0
+    model_max_ctx: Optional[int] = None
+    fallback_vram = 2.5
+
+    if entry is not None:
+        raw_ctx = getattr(entry.manifest, "model_max_context", None)
+        if isinstance(raw_ctx, int) and not isinstance(raw_ctx, bool) and raw_ctx > 0:
+            model_max_ctx = raw_ctx
+        fallback_vram = float(getattr(entry.hints, "estimated_vram_gb", 0.0) or 0.0)
+        if entry.library_state.primary_file_exists:
+            base_dir = _asset_root_for_entry(entry)
+            p_path = _resolve_asset_path(base_dir, entry.manifest.primary_file)
+            if p_path is not None and p_path.is_file():
+                primary_bytes = p_path.stat().st_size
+            for comp in entry.manifest.companion_files:
+                c_path = _resolve_asset_path(base_dir, comp.path)
+                if c_path is not None and c_path.is_file():
+                    companion_bytes += c_path.stat().st_size
+
+    return assess_context_options(
+        primary_bytes,
+        companion_size_bytes=companion_bytes,
+        profile=profile,
+        model_max_context=model_max_ctx,
+        dedicated_vram_gb=dedicated_vram_gb,
+        total_ram_gb=total_ram_gb,
+        fallback_vram_gb=fallback_vram if primary_bytes <= 0 else 0.0,
+    )
 
 
 def _get_factory_model_root() -> Path:
@@ -367,6 +894,29 @@ def _parse_registry_entry_dict(raw: dict, source: Literal["factory", "installed"
             sha256_primary=raw.get("sha256_primary"),
         )
 
+        parsed_provenance: List[CapabilityEntry] = []
+        raw_prov = raw.get("capability_provenance")
+        if isinstance(raw_prov, list):
+            for item in raw_prov:
+                if isinstance(item, dict) and "capability" in item:
+                    try:
+                        parsed_provenance.append(
+                            CapabilityEntry(
+                                capability=ModelCapability(item["capability"]),
+                                supported=bool(item.get("supported", True)),
+                                provenance=CapabilityProvenance(
+                                    item.get("provenance", CapabilityProvenance.declared.value)
+                                ),
+                            )
+                        )
+                    except ValueError:
+                        pass
+        if not parsed_provenance:
+            parsed_provenance = [
+                CapabilityEntry(capability=c, supported=True, provenance=CapabilityProvenance.declared)
+                for c in capabilities
+            ]
+
         library_state = ModelLibraryState(
             discovery_state=ModelDiscoveryState.registered,
             validation_status=ValidationStatus.unregistered,
@@ -374,10 +924,7 @@ def _parse_registry_entry_dict(raw: dict, source: Literal["factory", "installed"
             size_gb=None,
             companion_artifact_statuses=[],
             available_capabilities=list(capabilities),
-            capability_provenance=[
-                CapabilityEntry(capability=c, supported=True, provenance=CapabilityProvenance.declared)
-                for c in capabilities
-            ],
+            capability_provenance=parsed_provenance,
         )
 
         gen_defaults = None
@@ -497,6 +1044,9 @@ def _validate_entry(entry: ModelRegistryEntry) -> ModelRegistryEntry:
     Missing primary marks model unavailable (available_capabilities=[]).
     """
     base_dir = _asset_root_for_entry(entry)
+    preserved_prov = {
+        cp.capability: cp.provenance for cp in entry.library_state.capability_provenance
+    }
     primary_resolved = _resolve_asset_path(base_dir, entry.manifest.primary_file)
     primary_exists = primary_resolved is not None and primary_resolved.is_file()
     entry.library_state.primary_file_exists = primary_exists
@@ -512,7 +1062,11 @@ def _validate_entry(entry: ModelRegistryEntry) -> ModelRegistryEntry:
         entry.library_state.available_capabilities = []
         entry.library_state.companion_artifact_statuses = []
         entry.library_state.capability_provenance = [
-            CapabilityEntry(capability=c, supported=False, provenance=CapabilityProvenance.declared)
+            CapabilityEntry(
+                capability=c,
+                supported=False,
+                provenance=preserved_prov.get(c, CapabilityProvenance.declared),
+            )
             for c in entry.manifest.capabilities
         ]
         return entry
@@ -548,7 +1102,11 @@ def _validate_entry(entry: ModelRegistryEntry) -> ModelRegistryEntry:
                 available.remove(ModelCapability.vision)
         entry.library_state.available_capabilities = available
         entry.library_state.capability_provenance = [
-            CapabilityEntry(capability=c, supported=(c in available), provenance=CapabilityProvenance.declared)
+            CapabilityEntry(
+                capability=c,
+                supported=(c in available),
+                provenance=preserved_prov.get(c, CapabilityProvenance.declared),
+            )
             for c in entry.manifest.capabilities
         ]
         return entry
@@ -558,7 +1116,11 @@ def _validate_entry(entry: ModelRegistryEntry) -> ModelRegistryEntry:
     entry.library_state.discovery_state = ModelDiscoveryState.verified
     entry.library_state.available_capabilities = list(entry.manifest.capabilities)
     entry.library_state.capability_provenance = [
-        CapabilityEntry(capability=c, supported=True, provenance=CapabilityProvenance.declared)
+        CapabilityEntry(
+            capability=c,
+            supported=True,
+            provenance=preserved_prov.get(c, CapabilityProvenance.declared),
+        )
         for c in entry.manifest.capabilities
     ]
     return entry
@@ -599,6 +1161,24 @@ def build_model_list() -> List[ModelRegistryEntry]:
 
     for entry in effective_entries:
         validated_entry = _validate_entry(entry)
+        base_dir = _asset_root_for_entry(validated_entry)
+        primary_bytes = 0
+        companion_bytes = 0
+        if validated_entry.library_state.primary_file_exists:
+            p_path = _resolve_asset_path(base_dir, validated_entry.manifest.primary_file)
+            if p_path is not None and p_path.is_file():
+                primary_bytes = p_path.stat().st_size
+            for comp in validated_entry.manifest.companion_files:
+                c_path = _resolve_asset_path(base_dir, comp.path)
+                if c_path is not None and c_path.is_file():
+                    companion_bytes += c_path.stat().st_size
+        rec_profiles, est_vram = compute_recommended_profiles_for_model(
+            file_size_bytes=primary_bytes,
+            companion_size_bytes=companion_bytes,
+            fallback_vram_gb=validated_entry.hints.estimated_vram_gb,
+        )
+        validated_entry.hints.recommended_profiles = rec_profiles
+        validated_entry.hints.estimated_vram_gb = est_vram
         registered_primary_files.add((validated_entry.registry_source, validated_entry.manifest.primary_file))
         registered.append(validated_entry)
 
@@ -662,9 +1242,12 @@ def build_model_list() -> List[ModelRegistryEntry]:
                 available_capabilities=[],
                 capability_provenance=[],
             )
+            rec_unreg, est_unreg = compute_recommended_profiles_for_model(
+                file_size_bytes=path.stat().st_size,
+            )
             hints = ModelRuntimeHints(
-                recommended_profiles=["balanced"],
-                estimated_vram_gb=0.0,
+                recommended_profiles=rec_unreg,
+                estimated_vram_gb=est_unreg,
                 estimated_ram_gb=0.0,
             )
             unregistered.append(

@@ -119,6 +119,13 @@ class ImportIsolationTests(unittest.TestCase):
             assert config_file.read_text(encoding="utf-8") == original_config, "Valid configuration was rewritten"
         """, f"COMPANION_API_KEY={SYNTHETIC_TOKEN}\nDEBUG=false\n")
 
+    def test_m2_services_import_has_no_external_or_filesystem_side_effects(self):
+        self.run_isolated("""
+            import app.services.autostart
+            import app.services.model_import
+            assert not list(sandbox.rglob("*.gguf")), "Import created unexpected files"
+        """)
+
     def test_explicit_initialization_persists_only_disposable_configuration(self):
         self.run_isolated("""
             from app.core.config import Settings, settings

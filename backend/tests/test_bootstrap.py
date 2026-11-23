@@ -213,3 +213,136 @@ def test_explicit_override_preserves_precedence_over_corrupt_locator(monkeypatch
     assert resolve_data_root(bootstrap_path=locator) == environment.resolve()
     assert resolve_data_root(env_override=str(explicit), bootstrap_path=locator) == explicit.resolve()
     assert not explicit.exists() and not environment.exists()
+
+
+def test_default_cache_and_log_roots_windows_semantics(monkeypatch, tmp_path):
+    from app.core.storage import get_default_app_install_root, get_default_cache_root, get_default_log_root
+
+    mock_localappdata = tmp_path / "LocalAppData"
+    monkeypatch.setenv("LOCALAPPDATA", str(mock_localappdata))
+
+    assert get_default_cache_root() == mock_localappdata / "AI Companion" / "Cache"
+    assert get_default_log_root() == mock_localappdata / "AI Companion" / "Logs"
+    assert get_default_app_install_root().is_absolute()
+
+
+def test_cache_log_app_install_root_resolvers_and_relative_rejection(monkeypatch, tmp_path):
+    from app.core.storage import (
+        StorageError,
+        resolve_app_install_root,
+        resolve_cache_root,
+        resolve_log_root,
+    )
+
+    custom_cache = tmp_path / "CustomCache"
+    custom_log = tmp_path / "CustomLogs"
+    custom_install = tmp_path / "CustomInstall"
+    monkeypatch.setenv("COMPANION_CACHE_ROOT", str(custom_cache))
+    monkeypatch.setenv("COMPANION_LOG_ROOT", str(custom_log))
+    monkeypatch.setenv("COMPANION_APP_INSTALL_ROOT", str(custom_install))
+
+    assert resolve_cache_root() == custom_cache.resolve()
+    assert resolve_log_root() == custom_log.resolve()
+    assert resolve_app_install_root() == custom_install.resolve()
+    assert not custom_cache.exists() and not custom_log.exists() and not custom_install.exists()
+
+    with pytest.raises(StorageError):
+        resolve_cache_root(env_override="./rel-cache")
+    with pytest.raises(StorageError):
+        resolve_log_root(env_override="./rel-logs")
+    with pytest.raises(StorageError):
+        resolve_app_install_root(env_override="./rel-install")
+
+
+def test_resolve_library_root_precedence_and_env_isolation(monkeypatch, tmp_path):
+    from app.core.storage import StorageError, resolve_library_root
+
+    data_root = (tmp_path / "Data").resolve()
+    lib_from_bootstrap = (tmp_path / "BootstrapLibrary").resolve()
+    lib_from_env = (tmp_path / "EnvLibrary").resolve()
+    locator = tmp_path / "bootstrap.json"
+    locator.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "data_root": str(data_root),
+                "library_root": str(lib_from_bootstrap),
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.delenv("COMPANION_LIBRARY_ROOT", raising=False)
+    monkeypatch.delenv("COMPANION_DATA_ROOT", raising=False)
+
+    # 1. Explicit bootstrap_path uses library_root
+    assert resolve_library_root(data_root, bootstrap_path=locator) == lib_from_bootstrap
+
+    # 2. If global bootstrap has library_root while COMPANION_DATA_ROOT env redirects away,
+    #    do NOT mix unrelated global library_root into isolated test/env data_root.
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "FakeLocal"))
+    global_locator = tmp_path / "FakeLocal" / "AI Companion" / "bootstrap.json"
+    global_locator.parent.mkdir(parents=True)
+    global_locator.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "data_root": str(tmp_path / "RealData"),
+                "library_root": str(lib_from_bootstrap),
+            }
+        ),
+        encoding="utf-8",
+    )
+    isolated_data = (tmp_path / "IsolatedData").resolve()
+    monkeypatch.setenv("COMPANION_DATA_ROOT", str(isolated_data))
+    assert resolve_library_root(isolated_data) == (isolated_data / "library").resolve()
+
+    # 3. COMPANION_LIBRARY_ROOT env override beats bootstrap.json
+    monkeypatch.setenv("COMPANION_LIBRARY_ROOT", str(lib_from_env))
+    assert resolve_library_root(data_root, bootstrap_path=locator) == lib_from_env
+
+    # 4. Relative COMPANION_LIBRARY_ROOT fails closed
+    with pytest.raises(StorageError):
+        resolve_library_root(data_root, env_override="./rel-lib", bootstrap_path=locator)
+
+    assert not lib_from_bootstrap.exists() and not lib_from_env.exists()
+
+
+@pytest.mark.parametrize("bad_lib_root", [123, "", "   ", "./relative-lib", None])
+def test_resolve_library_root_malformed_bootstrap_fails_closed(bad_lib_root, monkeypatch, tmp_path):
+    from app.core.storage import resolve_library_root
+
+    monkeypatch.delenv("COMPANION_LIBRARY_ROOT", raising=False)
+    monkeypatch.delenv("COMPANION_DATA_ROOT", raising=False)
+    data_root = (tmp_path / "Data").resolve()
+    locator = tmp_path / "bootstrap.json"
+    locator.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "data_root": str(data_root),
+                "library_root": bad_lib_root,
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(BootstrapCorruptError):
+        resolve_library_root(data_root, bootstrap_path=locator)
+
+
+def test_write_bootstrap_optional_library_root(tmp_path):
+    from app.core.storage import StorageError
+
+    locator = tmp_path / "AI Companion" / "bootstrap.json"
+    data_root = tmp_path / "Data"
+    lib_root = tmp_path / "ExternalLibrary"
+
+    with pytest.raises(StorageError):
+        write_bootstrap(data_root=data_root, bootstrap_path=locator, library_root=Path("./rel"))
+    assert not locator.exists()
+
+    write_bootstrap(data_root=data_root, bootstrap_path=locator, library_root=lib_root)
+    payload = json.loads(locator.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == 1
+    assert payload["data_root"] == str(data_root.resolve())
+    assert payload["library_root"] == str(lib_root.resolve())

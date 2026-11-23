@@ -22,6 +22,19 @@ class LLMManager:
             cls._instance = super().__new__(cls)
         return cls._instance
 
+    def _discover_real_ggufs(self) -> list:
+        real_models = []
+        for root_dir in (settings.MODELS_DIR, settings.MODEL_LIBRARY_DIR):
+            if root_dir.exists():
+                real_models.extend(
+                    f for f in root_dir.rglob("*.gguf")
+                    if f.is_file()
+                    and f.name != "lfs-test.gguf"
+                    and not f.name.startswith("mmproj")
+                    and f.stat().st_size > 100 * 1024 * 1024
+                )
+        return real_models
+
     def get_provider(self) -> BaseLLMProvider:
         """Resolve and return active provider based on settings and available models."""
         if self._provider is not None:
@@ -36,15 +49,7 @@ class LLMManager:
             logger.info("Explicit 'llama_cpp' LLM provider selected.")
             self._provider = LlamaCppProvider()
         else:  # "auto"
-            real_models = []
-            if settings.MODELS_DIR.exists():
-                real_models = [
-                    f for f in settings.MODELS_DIR.rglob("*.gguf")
-                    if f.is_file()
-                    and f.name != "lfs-test.gguf"
-                    and not f.name.startswith("mmproj")
-                    and f.stat().st_size > 100 * 1024 * 1024
-                ]
+            real_models = self._discover_real_ggufs()
             if real_models:
                 logger.info(f"Real GGUF model detected ({real_models[0].name}). Engaging LlamaCppProvider.")
                 self._provider = LlamaCppProvider()
@@ -53,6 +58,20 @@ class LLMManager:
                 self._provider = MockLLMProvider()
 
         return self._provider
+
+    def refresh_auto_provider_if_idle(self) -> bool:
+        """Promote idle MockLLMProvider to LlamaCppProvider after a D6 model install in 'auto' mode."""
+        if settings.LLM_PROVIDER.lower().strip() != "auto":
+            return False
+        if not isinstance(self._provider, MockLLMProvider):
+            return False
+        if self._provider.is_loaded() or getattr(self._provider, "has_active_generation", False):
+            return False
+        if not self._discover_real_ggufs() and not settings.INSTALLED_REGISTRY_PATH.is_file():
+            return False
+        logger.info("Refreshing idle auto provider from MockLLMProvider to LlamaCppProvider after D6 install.")
+        self._provider = LlamaCppProvider()
+        return True
 
     def set_provider(self, provider: BaseLLMProvider) -> None:
         """Override active provider (useful for testing or manual provider switching)."""

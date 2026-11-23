@@ -184,6 +184,31 @@ void main() {
       expect(res.resolvedPath, equals(r'D:\NonExistentData'));
       expect(res.source, equals(StorageRootSource.localDiagnostic));
     });
+
+    test('validates optional library_root fail-closed while preserving valid locators', () {
+      final badLib = evaluateBootstrapLocatorContent(
+        fileExists: true,
+        rawJson: '{"schema_version": 1, "data_root": "D:\\\\Data", "library_root": "./rel"}',
+        isWindows: true,
+      );
+      expect(badLib.locatorStatus, equals(LocatorStatus.corrupt));
+
+      final emptyLib = evaluateBootstrapLocatorContent(
+        fileExists: true,
+        rawJson: '{"schema_version": 1, "data_root": "D:\\\\Data", "library_root": ""}',
+        isWindows: true,
+      );
+      expect(emptyLib.locatorStatus, equals(LocatorStatus.corrupt));
+
+      final goodLib = evaluateBootstrapLocatorContent(
+        fileExists: true,
+        rawJson: '{"schema_version": 1, "data_root": "D:\\\\Data", "library_root": "E:\\\\AILibrary"}',
+        isWindows: true,
+        pathExistsChecker: (p) => p == r'D:\Data',
+      );
+      expect(goodLib.locatorStatus, equals(LocatorStatus.validAvailable));
+      expect(goodLib.resolvedPath, equals(r'D:\Data'));
+    });
   });
 
   group('CompanionException', () {

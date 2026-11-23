@@ -9,12 +9,15 @@ import 'package:flutter/material.dart';
 import '../../../controllers/desktop_settings_controller.dart';
 import '../../../coordinator/desktop_runtime_coordinator.dart';
 import '../../../platform/desktop_client_settings.dart';
+import '../../../platform/host_admin_secret_store.dart';
 import '../../../platform/windows_dpapi_credential_store.dart';
+import '../../../platform/windows_shell_adapter.dart';
 import '../../chat/desktop_chat_controller.dart';
 import '../settings_section.dart';
 
-/// Settings category section for Local AI Runtime connection, DPAPI pairing,
-/// Windows process supervision diagnostics, and local LLM model selection.
+/// Consumer-first AI & Local Models section with top Refresh, PC-aware model
+/// recommendations, experimental >8K context override, native model file picker,
+/// and collapsible Advanced Connection & Process Diagnostics.
 class SettingsRuntimeSection extends StatefulWidget {
   const SettingsRuntimeSection({
     super.key,
@@ -24,6 +27,7 @@ class SettingsRuntimeSection extends StatefulWidget {
     this.clientSettings,
     this.credentialStore,
     this.client,
+    this.shellAdapter,
   });
 
   final DesktopSettingsController controller;
@@ -32,6 +36,7 @@ class SettingsRuntimeSection extends StatefulWidget {
   final DesktopClientSettings? clientSettings;
   final CredentialStore? credentialStore;
   final CompanionClient? client;
+  final DesktopShellAdapter? shellAdapter;
 
   @override
   State<SettingsRuntimeSection> createState() => _SettingsRuntimeSectionState();
@@ -50,6 +55,8 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
       widget.clientSettings ?? DesktopClientSettings();
   CredentialStore get _credentialStore =>
       widget.credentialStore ?? WindowsDpapiCredentialStore();
+  DesktopShellAdapter get _shell =>
+      widget.shellAdapter ?? WindowsShellAdapter();
 
   List<ModelRegistryEntry>? _registryEntries;
   ModelStatusResponse? _modelStatus;
@@ -58,18 +65,63 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
   bool _isStillLoading = false;
   String? _selectedModelId;
   String? _modelActionMessage;
+  bool _isUpdatingProfile = false;
+  bool _allowUnsafeExperimentalCtx = false;
+  bool _isStartingRuntime = false;
+  bool _lastRuntimeOperational = false;
+  bool _isScanningInbox = false;
+  bool _movePickedFiles = false;
+  String? _installingRelativePath;
+  String? _deletingModelId;
+  String? _libraryRoot;
+  String? _importInboxDir;
+  ModelImportScanOut? _inboxScanResult;
+  final Map<String, TextEditingController> _candidateNameControllers = {};
+  final Map<String, String?> _selectedCandidateMmproj = {};
+
   DesktopNavDestination _lastDestination = DesktopNavDestination.chat;
   SettingsSectionId _lastSection = SettingsSectionId.appearance;
+  int _lastStorageRevision = 0;
+
+  bool _advancedUserToggled = false;
+  bool _advancedExpanded = false;
 
   void _handleControllerChange() {
     final dest = widget.controller.currentDestination;
     final section = widget.controller.selectedSettingsSection;
+    final storageRev = widget.controller.storageRevision;
     final enteredSettings = dest == DesktopNavDestination.settings &&
         _lastDestination != DesktopNavDestination.settings;
     final enteredRuntimeSection =
         section == SettingsSectionId.runtime &&
         _lastSection != SettingsSectionId.runtime;
-    if (enteredSettings || enteredRuntimeSection) {
+    final storageChanged = storageRev != _lastStorageRevision;
+    final isOperationalNow =
+        widget.controller.runtimeProcessState?.isOperational ?? false;
+    final runtimeBecameOperational =
+        isOperationalNow && !_lastRuntimeOperational;
+    _lastRuntimeOperational = isOperationalNow;
+
+    if (storageChanged) {
+      _lastStorageRevision = storageRev;
+      _selectedCandidateMmproj.clear();
+      for (final ctrl in _candidateNameControllers.values) {
+        ctrl.dispose();
+      }
+      _candidateNameControllers.clear();
+      if (mounted) {
+        setState(() {
+          _inboxScanResult = null;
+          _importInboxDir = null;
+          _libraryRoot = null;
+        });
+      }
+    }
+
+    if (enteredSettings ||
+        enteredRuntimeSection ||
+        storageChanged ||
+        runtimeBecameOperational) {
       _loadModelData();
     }
     _lastDestination = dest;
@@ -88,6 +140,12 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
     _tokenController = TextEditingController();
     _lastDestination = widget.controller.currentDestination;
     _lastSection = widget.controller.selectedSettingsSection;
+    _lastStorageRevision = widget.controller.storageRevision;
+    _lastRuntimeOperational =
+        widget.controller.runtimeProcessState?.isOperational ?? false;
+    if (widget.client == null) {
+      _advancedExpanded = true;
+    }
 
     _clientSettings.readHostUrl().then((saved) {
       if (mounted && !_urlDirty && saved.isNotEmpty) {
@@ -116,8 +174,13 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
     widget.controller.removeListener(_handleControllerChange);
     _urlController.dispose();
     _tokenController.dispose();
+    for (final c in _candidateNameControllers.values) {
+      c.dispose();
+    }
     super.dispose();
   }
+
+  String _formatError(Object e) => e is CompanionApiException ? e.message : '$e';
 
   @override
   Widget build(BuildContext context) {
@@ -127,413 +190,157 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildRuntimeConnectionCard(context, ext, isDark),
-        const SizedBox(height: CompanionSpacing.lg),
-        _buildRuntimeSupervisionCard(context, ext, isDark),
-        const SizedBox(height: CompanionSpacing.lg),
+        _buildTopHeaderBar(ext),
+        const SizedBox(height: CompanionSpacing.md),
         _buildModelSelectionCard(context, ext, isDark),
+        const SizedBox(height: CompanionSpacing.lg),
+        _buildAddLocalModelsCard(context, ext, isDark),
+        const SizedBox(height: CompanionSpacing.lg),
+        _buildModelRegistryListCard(context, ext, isDark),
+        const SizedBox(height: CompanionSpacing.lg),
+        _buildAdvancedDiagnosticsAccordion(context, ext, isDark),
       ],
     );
   }
 
-  Widget _buildRuntimeSupervisionCard(
-    BuildContext context,
-    CompanionThemeExtension? ext,
-    bool isDark,
-  ) {
-    final runtime = widget.controller.runtimeProcessState;
-    final lockfile = widget.controller.runtimeLockfileData;
+  bool _isLocalRuntimeRecoverableOffline() {
+    final rc = widget.runtimeCoordinator;
+    if (rc == null || !rc.isLocalLoopback) return false;
+    final status =
+        widget.controller.runtimeProcessState?.status ?? rc.currentState.status;
+    return status == RuntimeStatus.startupTimeout ||
+        status == RuntimeStatus.stopped ||
+        status == RuntimeStatus.dormant ||
+        status == RuntimeStatus.unreachable;
+  }
 
-    final isLoopback = runtime?.isLocalSupervised ?? true;
-    final modeLabel =
-        isLoopback ? 'Local Loopback (Supervised)' : 'Remote Host (Unmanaged)';
-    final statusLabel = runtime?.status.name ?? 'Dormant / Standalone';
-    final pidLabel = !isLoopback
-        ? 'N/A (Remote Host)'
-        : (runtime?.pid != null
-            ? '${runtime!.pid}'
-            : (lockfile?.pid != null ? '${lockfile!.pid}' : 'None'));
-    final portLabel = '${runtime?.port ?? 8000}';
+  Future<void> _startOrRetryLocalRuntime() async {
+    final rc = widget.runtimeCoordinator;
+    if (rc == null || _isStartingRuntime) return;
+    setState(() {
+      _isStartingRuntime = true;
+      _testConnectionResult = 'Starting local AI runtime...';
+    });
+    try {
+      final runtimeState =
+          await rc.ensureRuntimeReady(timeout: const Duration(seconds: 30));
+      if (!mounted) return;
+      setState(() {
+        _isStartingRuntime = false;
+        switch (runtimeState.status) {
+          case RuntimeStatus.readyAndAuthenticated:
+            _testConnectionResult = 'Local runtime ready and authenticated.';
+            break;
+          case RuntimeStatus.reachableUnauthenticated:
+            _testConnectionResult =
+                'Local runtime running, but pairing authentication failed.';
+            break;
+          case RuntimeStatus.alienPortConflict:
+            _testConnectionResult =
+                'Port conflict detected on port ${runtimeState.port}.';
+            break;
+          default:
+            final diag = runtimeState.diagnosticMessage;
+            final suffix =
+                (diag != null && diag.isNotEmpty) ? ': $diag' : '';
+            _testConnectionResult =
+                'Could not start local runtime (${runtimeState.status.name})$suffix';
+        }
+      });
+      if (runtimeState.isOperational) {
+        await _loadModelData();
+        if (widget.chatController != null) {
+          try {
+            await widget.chatController!.checkConnection();
+          } catch (_) {}
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isStartingRuntime = false;
+        _testConnectionResult =
+            'Failed to start local runtime: ${_formatError(e)}';
+      });
+    }
+  }
 
-    final localAppData =
-        Platform.environment['LOCALAPPDATA'] ?? r'C:\Users\<user>\AppData\Local';
-    final lockPath = !isLoopback
-        ? 'N/A (Remote Host - Unmanaged)'
-        : '$localAppData\\AI Companion\\runtime.lock';
-    final logPath = !isLoopback
-        ? 'N/A (Remote Host - Unmanaged)'
-        : '$localAppData\\AI Companion\\Logs\\runtime.log';
+  Future<void> _handleRefreshAll() async {
+    if (_isLocalRuntimeRecoverableOffline() && !_isStartingRuntime) {
+      await _startOrRetryLocalRuntime();
+    } else {
+      await _loadModelData();
+    }
+  }
 
+  Widget _buildTopHeaderBar(CompanionThemeExtension? ext) {
+    final showRetryRuntime =
+        _isLocalRuntimeRecoverableOffline() || _isStartingRuntime;
     return SoftGlassPanel(
-      padding: const EdgeInsets.all(CompanionSpacing.xl),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.developer_board_rounded, size: 20, color: ext?.accent),
-              const SizedBox(width: CompanionSpacing.sm),
-              Expanded(
-                child: Text(
-                  'Runtime Process Supervision',
-                  style: CompanionTypography.titleMedium
-                      .copyWith(color: ext?.textPrimary),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: CompanionSpacing.xs),
-          Text(
-            'Local process lifecycle, kernel file lock synchronization, and process provenance',
-            style: CompanionTypography.caption
-                .copyWith(color: ext?.textSecondary),
-          ),
-          const SizedBox(height: CompanionSpacing.lg),
-          NeumorphicSurface(
-            surfaceType: NeumorphicSurfaceType.recessed,
-            borderRadius: CompanionRadius.borderMd,
-            padding: const EdgeInsets.all(CompanionSpacing.md),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildDiagnosticRow('Supervision Mode', modeLabel, ext),
-                const Divider(height: CompanionSpacing.md),
-                _buildDiagnosticRow('Supervision Status', statusLabel, ext),
-                const Divider(height: CompanionSpacing.md),
-                _buildDiagnosticRow('Process ID (PID)', pidLabel, ext),
-                const Divider(height: CompanionSpacing.md),
-                _buildDiagnosticRow('Bound Port', portLabel, ext),
-                const Divider(height: CompanionSpacing.md),
-                _buildDiagnosticRow('Kernel Lockfile', lockPath, ext),
-                const Divider(height: CompanionSpacing.md),
-                _buildDiagnosticRow('Detached Logfile', logPath, ext),
-              ],
-            ),
-          ),
-          const SizedBox(height: CompanionSpacing.sm),
-          Text(
-            'Lifecycle Invariant: Closing the window (×) hides to system tray and leaves the background runtime running. Exiting Companion performs authenticated cooperative shutdown of the host runtime.',
-            style: CompanionTypography.caption.copyWith(
-              color: ext?.textMuted,
-              fontStyle: FontStyle.italic,
-            ),
-          ),
-        ],
+      padding: const EdgeInsets.symmetric(
+        horizontal: CompanionSpacing.xl,
+        vertical: CompanionSpacing.md,
       ),
-    );
-  }
-
-  Widget _buildDiagnosticRow(
-    String label,
-    String value,
-    CompanionThemeExtension? ext,
-  ) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          label,
-          style: CompanionTypography.bodySmall.copyWith(
-            color: ext?.textSecondary,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        Flexible(
-          child: Text(
-            value,
-            textAlign: TextAlign.end,
-            style: CompanionTypography.bodySmall.copyWith(
-              color: ext?.textPrimary,
-              fontWeight: FontWeight.w600,
-            ),
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildRuntimeConnectionCard(
-    BuildContext context,
-    CompanionThemeExtension? ext,
-    bool isDark,
-  ) {
-    return SoftGlassPanel(
-      padding: const EdgeInsets.all(CompanionSpacing.xl),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: CompanionSpacing.md,
+        runSpacing: CompanionSpacing.sm,
         children: [
-          Row(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.link_rounded, size: 20, color: ext?.accent),
-              const SizedBox(width: CompanionSpacing.sm),
-              Expanded(
-                child: Text(
-                  'Runtime Connection & Pairing',
-                  style: CompanionTypography.titleMedium
-                      .copyWith(color: ext?.textPrimary),
-                ),
+              Text(
+                'AI & Local Models',
+                style: CompanionTypography.titleMedium
+                    .copyWith(color: ext?.textPrimary),
+              ),
+              Text(
+                'Switch models, tune speed vs quality, or add new GGUF models',
+                style: CompanionTypography.caption
+                    .copyWith(color: ext?.textSecondary),
               ),
             ],
           ),
-          const SizedBox(height: CompanionSpacing.xs),
-          Text(
-            'Configure Local AI Runtime endpoint URL and DPAPI-protected pairing secret',
-            style: CompanionTypography.caption
-                .copyWith(color: ext?.textSecondary),
-          ),
-          const SizedBox(height: CompanionSpacing.lg),
-
-          Text(
-            'Runtime Host URL',
-            style: CompanionTypography.bodySmall.copyWith(
-              color: ext?.textSecondary,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: CompanionSpacing.xs),
-          NeumorphicSurface(
-            surfaceType: NeumorphicSurfaceType.recessed,
-            borderRadius: CompanionRadius.borderMd,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-            child: TextField(
-              key: const Key('runtime_host_url_input'),
-              controller: _urlController,
-              onChanged: (_) => _urlDirty = true,
-              style: CompanionTypography.bodyMedium
-                  .copyWith(color: ext?.textPrimary),
-              decoration: InputDecoration(
-                border: InputBorder.none,
-                isDense: true,
-                hintText: 'http://127.0.0.1:8000',
-                hintStyle:
-                    CompanionTypography.bodyMedium.copyWith(color: ext?.textMuted),
-              ),
-            ),
-          ),
-          const SizedBox(height: CompanionSpacing.md),
-
-          Text(
-            'Pairing Token (Protected by Windows DPAPI)',
-            style: CompanionTypography.bodySmall.copyWith(
-              color: ext?.textSecondary,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: CompanionSpacing.xs),
-          NeumorphicSurface(
-            surfaceType: NeumorphicSurfaceType.recessed,
-            borderRadius: CompanionRadius.borderMd,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    key: const Key('runtime_pairing_token_input'),
-                    controller: _tokenController,
-                    onChanged: (_) => _tokenDirty = true,
-                    obscureText: _obscureToken,
-                    style: CompanionTypography.bodyMedium
-                        .copyWith(color: ext?.textPrimary),
-                    decoration: InputDecoration(
-                      border: InputBorder.none,
-                      isDense: true,
-                      hintText: 'Enter pairing token...',
-                      hintStyle: CompanionTypography.bodyMedium
-                          .copyWith(color: ext?.textMuted),
-                    ),
-                  ),
-                ),
-                IconButton(
-                  icon: Icon(
-                    _obscureToken
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined,
-                    size: 18,
-                    color: ext?.textSecondary,
-                  ),
-                  tooltip: _obscureToken ? 'Show token' : 'Hide token',
-                  onPressed: () {
-                    setState(() {
-                      _obscureToken = !_obscureToken;
-                    });
-                  },
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: CompanionSpacing.md),
-
           Wrap(
-            spacing: CompanionSpacing.md,
-            runSpacing: CompanionSpacing.sm,
+            spacing: CompanionSpacing.sm,
+            runSpacing: CompanionSpacing.xs,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              NeumorphicButton(
-                child: Text(_isTesting ? 'Testing...' : 'Test Connection'),
-                icon: const Icon(Icons.network_check_rounded, size: 16),
-                size: NeumorphicButtonSize.sm,
-                onPressed: _isTesting
+              if (showRetryRuntime)
+                FilledButton.icon(
+                  key: const Key('runtime_top_retry_button'),
+                  onPressed:
+                      _isStartingRuntime ? null : _startOrRetryLocalRuntime,
+                  icon: _isStartingRuntime
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.play_arrow_rounded, size: 16),
+                  label: Text(
+                    _isStartingRuntime
+                        ? 'Starting...'
+                        : 'Start Local Runtime',
+                  ),
+                ),
+              FilledButton.tonalIcon(
+                key: const Key('runtime_top_refresh_button'),
+                onPressed: (_isLoadingModelCatalog || _isStartingRuntime)
                     ? null
-                    : () async {
-                        setState(() {
-                          _isTesting = true;
-                          _testConnectionResult = null;
-                        });
-                        final candidateUrl = _urlController.text.trim();
-                        final candidateToken = _tokenController.text.trim();
-                        try {
-                          CompanionClient.validateBaseUrl(candidateUrl);
-                          final probeStore =
-                              InMemoryCredentialStore(candidateToken);
-                          final probeClient = CompanionClient(
-                            baseUrl: candidateUrl,
-                            credentialStore: probeStore,
-                          );
-                          final health = await probeClient.getHealth();
-                          if (health.status == 'healthy') {
-                            if (candidateToken.isEmpty) {
-                              setState(() {
-                                _testConnectionResult =
-                                    'Reachable: Health OK (200), but pairing token is missing.';
-                              });
-                            } else {
-                              try {
-                                final auth = await probeClient.verifyAuth();
-                                setState(() {
-                                  _testConnectionResult =
-                                      'Verified: Health OK (200), pairing token verified (${auth.tokenType}).';
-                                });
-                              } catch (authErr) {
-                                setState(() {
-                                  _testConnectionResult =
-                                      'Reachable: Health OK (200), but authentication verification failed: $authErr';
-                                });
-                              }
-                            }
-                          } else {
-                            setState(() {
-                              _testConnectionResult =
-                                  'Runtime reported unhealthy status: ${health.status}';
-                            });
-                          }
-                        } catch (e) {
-                          setState(() {
-                            _testConnectionResult = 'Connection failed: $e';
-                          });
-                        } finally {
-                          if (mounted) {
-                            setState(() {
-                              _isTesting = false;
-                            });
-                          }
-                        }
-                      },
-              ),
-              NeumorphicButton(
-                child: const Text('Apply & Save'),
-                icon: const Icon(Icons.save_rounded, size: 16),
-                size: NeumorphicButtonSize.sm,
-                onPressed: () async {
-                  final candidateUrl = _urlController.text.trim();
-                  final candidateToken = _tokenController.text.trim();
-                  try {
-                    CompanionClient.validateBaseUrl(candidateUrl);
-                    await _clientSettings.writeHostUrl(candidateUrl);
-                    if (candidateToken.isNotEmpty) {
-                      await _credentialStore.writeToken(candidateToken);
-                    }
-                    if (widget.chatController != null) {
-                      try {
-                        await widget.chatController!.updateConfiguration(
-                          baseUrl: candidateUrl,
-                          pairingToken: candidateToken,
-                        );
-                      } catch (_) {}
-                    }
-                    if (widget.runtimeCoordinator != null) {
-                      setState(() {
-                        _testConnectionResult =
-                            'Settings persisted. Verifying connection to runtime...';
-                      });
-                      widget.runtimeCoordinator!.updateConfiguration(
-                        newBaseUrl: candidateUrl,
-                        credentialStore: _credentialStore,
-                      );
-                      final runtimeState =
-                          await widget.runtimeCoordinator!.ensureRuntimeReady(
-                        timeout: const Duration(seconds: 10),
-                      );
-                      if (mounted) {
-                        setState(() {
-                          switch (runtimeState.status) {
-                            case RuntimeStatus.readyAndAuthenticated:
-                              _testConnectionResult =
-                                  'Configuration saved: Connected and authenticated.';
-                              break;
-                            case RuntimeStatus.reachableUnauthenticated:
-                              _testConnectionResult =
-                                  'Configuration saved: Connected, but authentication failed.';
-                              break;
-                            case RuntimeStatus.alienPortConflict:
-                              _testConnectionResult =
-                                  'Configuration saved: Port conflict detected on ${runtimeState.port}.';
-                              break;
-                            default:
-                              final diag = runtimeState.diagnosticMessage;
-                              final suffix = (diag != null && diag.isNotEmpty)
-                                  ? ': $diag'
-                                  : '';
-                              _testConnectionResult =
-                                  'Configuration saved, but could not connect to runtime (${runtimeState.status.name})$suffix';
-                              break;
-                          }
-                        });
-                      }
-                    } else {
-                      if (mounted) {
-                        setState(() {
-                          _testConnectionResult = 'Configuration saved.';
-                        });
-                      }
-                    }
-                  } catch (e) {
-                    if (mounted) {
-                      setState(() {
-                        _testConnectionResult =
-                            'Failed to apply configuration: $e';
-                      });
-                    }
-                  }
-                },
+                    : _handleRefreshAll,
+                icon: _isLoadingModelCatalog
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.refresh_rounded, size: 16),
+                label: Text(_isLoadingModelCatalog ? 'Refreshing...' : 'Refresh All'),
               ),
             ],
           ),
-
-          if (_testConnectionResult != null) ...[
-            const SizedBox(height: CompanionSpacing.md),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: CompanionSpacing.md,
-                vertical: CompanionSpacing.sm,
-              ),
-              decoration: BoxDecoration(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.05)
-                    : Colors.black.withValues(alpha: 0.04),
-                borderRadius: CompanionRadius.borderMd,
-                border: Border.all(
-                  color: ext?.borderSubtle ?? Colors.transparent,
-                ),
-              ),
-              child: Text(
-                _testConnectionResult!,
-                style: CompanionTypography.caption.copyWith(
-                  color: ext?.textPrimary,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -553,12 +360,14 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
     return CompanionClient(
       baseUrl: uri.toString(),
       credentialStore: _credentialStore,
+      hostAdminStore: HostAdminSecretStore(),
     );
   }
 
   Future<void> _loadModelData() async {
     if (_isLoadingModelCatalog) return;
-    if (widget.client == null && Platform.environment.containsKey('FLUTTER_TEST')) {
+    if (widget.client == null &&
+        Platform.environment.containsKey('FLUTTER_TEST')) {
       final savedModel = await _clientSettings.readSelectedModel();
       if (mounted) {
         setState(() {
@@ -592,22 +401,42 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
             .getModelStatus()
             .catchError((_) => const ModelStatusResponse(provider: 'unknown')),
         _clientSettings.readSelectedModel(),
+        client
+            .getStorageRoots()
+            .then<StorageRootsResponse?>((v) => v)
+            .catchError((_) => null),
       ]);
 
       if (!mounted) return;
+      final storageResp = results[3] as StorageRootsResponse?;
+      final statusResp = results[1] as ModelStatusResponse;
       setState(() {
         _registryEntries = results[0] as List<ModelRegistryEntry>;
-        _modelStatus = results[1] as ModelStatusResponse;
+        _modelStatus = statusResp;
         final savedModel = results[2] as String?;
         _selectedModelId =
-            _modelStatus?.selectedModel ?? savedModel ?? _selectedModelId;
+            statusResp.selectedModel ?? savedModel ?? _selectedModelId;
+        if (storageResp != null) {
+          if (_importInboxDir != null &&
+              storageResp.importInboxDir.isNotEmpty &&
+              _importInboxDir != storageResp.importInboxDir) {
+            _inboxScanResult = null;
+            _selectedCandidateMmproj.clear();
+          }
+          if (storageResp.importInboxDir.isNotEmpty) {
+            _importInboxDir = storageResp.importInboxDir;
+          }
+          if (storageResp.libraryRoot.isNotEmpty) {
+            _libraryRoot = storageResp.libraryRoot;
+          }
+        }
         _isLoadingModelCatalog = false;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _isLoadingModelCatalog = false;
-        _modelActionMessage = 'Failed to load model catalog: $e';
+        _modelActionMessage = 'Could not load models: ${_formatError(e)}';
       });
     }
   }
@@ -690,11 +519,11 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
         _isStillLoading = false;
         if (loadImmediately) {
           _modelActionMessage = isActivated
-              ? 'Model selected and loaded: ${updatedStatus.activeModel ?? modelId}'
-              : 'Model selection saved (${updatedStatus.selectedModel ?? modelId}), but activation did not complete (${updatedStatus.runtimeState}). Model is NOT active.';
+              ? 'Model ready: ${targetEntry?.displayName ?? updatedStatus.activeModel ?? modelId}'
+              : 'Model selected (${updatedStatus.selectedModel ?? modelId}), but activation did not finish.';
         } else {
           _modelActionMessage =
-              'Model selected: $modelId (not loaded into memory)';
+              'Selected ${targetEntry?.displayName ?? modelId} (not loaded yet).';
         }
       });
       if (isActivated && widget.chatController != null) {
@@ -762,8 +591,8 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
         _isExecutingModelAction = false;
         _isStillLoading = false;
         _modelActionMessage = loadImmediately
-            ? 'Model selection saved, but activation failed: $e. Model is NOT active.'
-            : 'Model selection failed: $e';
+            ? 'Could not load model: ${_formatError(e)}'
+            : 'Model selection failed: ${_formatError(e)}';
       });
     }
   }
@@ -794,8 +623,8 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
             _modelStatus = status;
             _isStillLoading = false;
             _modelActionMessage = isActivated
-                ? 'Model selected and loaded: ${status.activeModel ?? modelId}'
-                : 'Model is ready: ${status.activeModel}';
+                ? 'Model ready: ${targetEntry?.displayName ?? status.activeModel ?? modelId}'
+                : 'Model ready: ${status.activeModel}';
           });
           widget.chatController?.updateModelStatus(status);
           return;
@@ -821,7 +650,7 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
         setState(() {
           _isStillLoading = false;
           _modelActionMessage =
-              'Model load status could not be confirmed: status check timed out.';
+              'Model load status timed out. Click Refresh Model Status to re-check.';
         });
         return;
       } catch (_) {}
@@ -852,14 +681,14 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
         } else {
           _isStillLoading = false;
           _modelActionMessage =
-              'Current model runtime state: ${fresh.runtimeState}';
+              'Current model state: ${fresh.runtimeState}';
         }
       });
       widget.chatController?.updateModelStatus(fresh);
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _modelActionMessage = 'Model load status could not be confirmed: $e';
+        _modelActionMessage = 'Could not check model status: ${_formatError(e)}';
       });
     }
   }
@@ -869,7 +698,7 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
     if (widget.chatController?.isGenerating == true) {
       setState(() {
         _modelActionMessage =
-            'Cannot unload model while turn generation is active.';
+            'Cannot unload model while a reply is being generated.';
       });
       return;
     }
@@ -906,9 +735,245 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
       if (!mounted) return;
       setState(() {
         _isExecutingModelAction = false;
-        _modelActionMessage = 'Failed to unload model: $e';
+        _modelActionMessage = 'Failed to unload model: ${_formatError(e)}';
       });
     }
+  }
+
+  Future<void> _updateHardwareProfile(
+    String profile, {
+    String? contextMode,
+  }) async {
+    if (_isUpdatingProfile || _isExecutingModelAction) return;
+    setState(() {
+      _isUpdatingProfile = true;
+      _modelActionMessage = 'Updating performance settings...';
+    });
+    try {
+      final client = _resolveClient();
+      final updatedStatus = await client.updateModelProfile(
+        profile,
+        contextMode: contextMode,
+      );
+      if (!mounted) return;
+      setState(() {
+        _modelStatus = updatedStatus;
+        _isUpdatingProfile = false;
+        final ctxLabel = updatedStatus.requestedContextMode == 'profile'
+            ? '${updatedStatus.contextSize} ctx'
+            : '${updatedStatus.contextSize} ctx (${updatedStatus.requestedContextMode})';
+        _modelActionMessage = updatedStatus.modelLoaded
+            ? 'Performance updated (${updatedStatus.requestedProfile.toUpperCase()} · $ctxLabel).'
+            : 'Performance updated (${updatedStatus.requestedProfile.toUpperCase()} · $ctxLabel). Click Load Model to apply.';
+      });
+      widget.chatController?.updateModelStatus(updatedStatus);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isUpdatingProfile = false;
+        _modelActionMessage =
+            'Could not update performance setting: ${_formatError(e)}';
+      });
+    }
+  }
+
+  Future<void> _browseAndStageModelFiles({String? dialogTitle}) async {
+    if (_isScanningInbox || _installingRelativePath != null) return;
+    final pickedPaths = await _shell.pickModelFiles(
+      title: dialogTitle ?? 'Select AI Model Files (.gguf / mmproj)',
+      allowMultiple: true,
+    );
+    if (pickedPaths.isEmpty || !mounted) return;
+
+    setState(() {
+      _isScanningInbox = true;
+      _modelActionMessage = _movePickedFiles
+          ? 'Moving selected file(s) to your model inbox...'
+          : 'Copying selected file(s) to your model inbox...';
+    });
+
+    try {
+      var inboxDir = _importInboxDir;
+      if (inboxDir == null || inboxDir.isEmpty) {
+        final client = _resolveClient();
+        final scanFirst = await client.scanModelImportInbox();
+        inboxDir = scanFirst.inboxDir;
+        if (mounted) {
+          setState(() {
+            _importInboxDir = inboxDir;
+          });
+        }
+      }
+      if (inboxDir.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _isScanningInbox = false;
+          _modelActionMessage = 'Unable to resolve Model Inbox folder from runtime.';
+        });
+        return;
+      }
+
+      await _shell.stageFilesToInbox(
+        sourcePaths: pickedPaths,
+        inboxDir: inboxDir,
+        moveFiles: _movePickedFiles,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _isScanningInbox = false;
+      });
+      await _scanInbox();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isScanningInbox = false;
+        _modelActionMessage = 'Could not import selected files: ${_formatError(e)}';
+      });
+    }
+  }
+
+  Future<void> _scanInbox() async {
+    if (_isScanningInbox) return;
+    setState(() {
+      _isScanningInbox = true;
+      _modelActionMessage = 'Scanning inbox for local AI models...';
+    });
+    try {
+      final client = _resolveClient();
+      final scanOut = await client.scanModelImportInbox();
+      if (!mounted) return;
+      final activePaths = scanOut.candidates.map((c) => c.relativePath).toSet();
+      final byPath = {for (final c in scanOut.candidates) c.relativePath: c};
+      final staleControllerKeys = _candidateNameControllers.keys
+          .where((k) => !activePaths.contains(k))
+          .toList();
+      for (final k in staleControllerKeys) {
+        _candidateNameControllers.remove(k)?.dispose();
+      }
+      _selectedCandidateMmproj.removeWhere((k, selectedVal) {
+        final cand = byPath[k];
+        if (cand == null) return true;
+        if (selectedVal == null) return false;
+        final validOptions = <String>{
+          if (cand.companionMmprojRelativePath != null)
+            cand.companionMmprojRelativePath!,
+          ...cand.compatibleMmprojPaths,
+        };
+        return !validOptions.contains(selectedVal);
+      });
+      for (final c in scanOut.candidates) {
+        _candidateNameControllers.putIfAbsent(
+          c.relativePath,
+          () => TextEditingController(text: c.displayName),
+        );
+      }
+      setState(() {
+        _inboxScanResult = scanOut;
+        if (scanOut.inboxDir.isNotEmpty) {
+          _importInboxDir = scanOut.inboxDir;
+        }
+        _isScanningInbox = false;
+        _modelActionMessage = scanOut.candidates.isEmpty
+            ? (scanOut.warnings.isEmpty
+                ? 'Inbox scanned: no .gguf models found yet.'
+                : 'Inbox scanned: check format notes below.')
+            : 'Found ${scanOut.candidates.length} model(s) ready to install.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isScanningInbox = false;
+        _modelActionMessage = 'Could not scan inbox: ${_formatError(e)}';
+      });
+    }
+  }
+
+  Future<void> _installCandidate(ModelImportCandidateOut cand) async {
+    if (_installingRelativePath != null) return;
+    setState(() {
+      _installingRelativePath = cand.relativePath;
+      _modelActionMessage = 'Verifying and installing ${cand.primaryFilename}...';
+    });
+    try {
+      final client = _resolveClient();
+      final customName = _candidateNameControllers[cand.relativePath]?.text.trim();
+      final selectedMmproj = _selectedCandidateMmproj.containsKey(cand.relativePath)
+          ? _selectedCandidateMmproj[cand.relativePath]
+          : cand.companionMmprojRelativePath;
+      final res = await client.installModelFromInbox(
+        ModelImportInstallRequest(
+          relativePath: cand.relativePath,
+          companionRelativePath: selectedMmproj,
+          modelId: cand.suggestedModelId,
+          displayName: (customName != null && customName.isNotEmpty)
+              ? customName
+              : cand.displayName,
+          variant: cand.variant,
+          family: cand.family,
+          license: cand.license,
+          transferMode: 'move',
+        ),
+      );
+      if (!mounted) return;
+      _selectedCandidateMmproj.remove(cand.relativePath);
+      setState(() {
+        _installingRelativePath = null;
+        _modelActionMessage = 'Installed ${res.displayName} into your library.';
+      });
+      await Future.wait([
+        _loadModelData(),
+        _scanInbox(),
+      ]);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _installingRelativePath = null;
+        _modelActionMessage = 'Installation failed: ${_formatError(e)}';
+      });
+    }
+  }
+
+  Future<void> _deleteInstalledModel(ModelRegistryEntry entry) async {
+    if (_deletingModelId != null || _isExecutingModelAction) return;
+    setState(() {
+      _deletingModelId = entry.id;
+      _modelActionMessage = 'Removing ${entry.displayName}...';
+    });
+    try {
+      final client = _resolveClient();
+      final out = await client.deleteInstalledModel(entry.id);
+      if (!mounted) return;
+      setState(() {
+        _deletingModelId = null;
+        _modelActionMessage = out.message;
+      });
+      await _loadModelData();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _deletingModelId = null;
+        _modelActionMessage = 'Could not remove model: ${_formatError(e)}';
+      });
+    }
+  }
+
+  Future<void> _openInboxInExplorer(String? path) async {
+    var target = path;
+    if (target == null || target.isEmpty) {
+      try {
+        final client = _resolveClient();
+        final scan = await client.scanModelImportInbox();
+        target = scan.inboxDir;
+        if (mounted) {
+          setState(() {
+            _importInboxDir = target;
+          });
+        }
+      } catch (_) {}
+    }
+    if (target == null || target.isEmpty) return;
+    await _shell.openFolder(target, createIfMissing: true);
   }
 
   Widget _buildModelSelectionCard(
@@ -921,47 +986,59 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
 
     Color stateColor;
     IconData stateIcon;
+    String stateHeadline;
     String stateDescription;
 
     switch (stateName) {
       case 'MODEL_READY':
         stateColor = ext?.success ?? CompanionColors.success;
         stateIcon = Icons.check_circle_rounded;
-        stateDescription = 'Ready (Active: ${status?.activeModel ?? "None"})';
+        stateHeadline = 'Ready';
+        stateDescription = 'Active model: ${status?.activeModel ?? "None"}';
         break;
       case 'MODEL_LOADING':
         stateColor = Colors.orange;
         stateIcon = Icons.sync_rounded;
-        stateDescription = 'Loading weights into memory...';
+        stateHeadline = 'Loading';
+        stateDescription = 'Loading model weights into memory...';
         break;
       case 'MODEL_SELECTION_REQUIRED':
         stateColor = Colors.amber;
         stateIcon = Icons.warning_amber_rounded;
-        stateDescription = 'Selection Required: Choose a model below';
+        stateHeadline = 'Choose a Model';
+        stateDescription = 'Select a model below to start chatting';
         break;
       case 'MODEL_SLEEPING':
         stateColor = Colors.purple;
         stateIcon = Icons.bedtime_rounded;
-        stateDescription = 'Sleeping (VRAM released)';
+        stateHeadline = 'Sleeping';
+        stateDescription = 'VRAM released while idle (wakes on next message)';
         break;
       case 'MODEL_ERROR':
       case 'SERVER_ERROR':
         stateColor = ext?.danger ?? CompanionColors.danger;
         stateIcon = Icons.error_outline_rounded;
+        stateHeadline = 'Needs Attention';
         stateDescription =
-            'Error: ${status?.lastRuntimeError ?? "Failed to load model. Model is NOT active."}';
+            status?.lastRuntimeError ?? 'Failed to load model. Model is NOT active.';
         break;
       case 'SERVER_STOPPED':
         stateColor = ext?.textMuted ?? Colors.grey;
         stateIcon = Icons.stop_circle_outlined;
-        stateDescription = 'Server Stopped';
+        stateHeadline = 'Standing By';
+        stateDescription = _selectedModelId != null
+            ? 'Selected: $_selectedModelId (click Load Model to start)'
+            : 'Inference engine stopped until you load a model';
         break;
       default:
         stateColor = ext?.accent ?? Colors.blue;
         stateIcon = Icons.info_outline_rounded;
+        stateHeadline = 'Unloaded';
         stateDescription =
-            'Unloaded (Selected: ${status?.selectedModel ?? _selectedModelId ?? "None"})';
+            'Selected: ${status?.selectedModel ?? _selectedModelId ?? "None"}';
     }
+
+    final reqCtxMode = status?.requestedContextMode ?? 'profile';
 
     return SoftGlassPanel(
       padding: const EdgeInsets.all(CompanionSpacing.xl),
@@ -969,42 +1046,43 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              Icon(Icons.memory_rounded, size: 20, color: ext?.accent),
+              const SizedBox(width: CompanionSpacing.sm),
               Expanded(
-                child: Row(
+                child: Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: CompanionSpacing.sm,
+                  runSpacing: CompanionSpacing.xs,
                   children: [
-                    Icon(Icons.memory_rounded, size: 20, color: ext?.accent),
-                    const SizedBox(width: CompanionSpacing.sm),
-                    Flexible(
-                      child: Text(
-                        'Local LLM Model Selection',
-                        style: CompanionTypography.titleMedium
-                            .copyWith(color: ext?.textPrimary),
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                    Text(
+                      'Local LLM Model Selection',
+                      style: CompanionTypography.titleMedium
+                          .copyWith(color: ext?.textPrimary),
                     ),
+                    if (status?.hostVramGb != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: ext?.accent.withValues(alpha: 0.12),
+                          borderRadius: CompanionRadius.borderSm,
+                        ),
+                        child: Text(
+                          '${status!.hostGpuName ?? 'GPU'} · ${status.hostVramGb!.toStringAsFixed(0)} GB VRAM'
+                          '${status.hostRamGb != null ? ' · ${status.hostRamGb!.toStringAsFixed(0)} GB RAM' : ''}',
+                          style: CompanionTypography.caption.copyWith(
+                            color: ext?.accent,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
-              IconButton(
-                icon: _isLoadingModelCatalog
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.refresh_rounded, size: 18),
-                tooltip: 'Refresh Models',
-                onPressed: _isLoadingModelCatalog ? null : _loadModelData,
-              ),
             ],
-          ),
-          const SizedBox(height: CompanionSpacing.xs),
-          Text(
-            'Dynamic model selection, verified capability badges, and persistent host configuration',
-            style: CompanionTypography.caption
-                .copyWith(color: ext?.textSecondary),
           ),
           const SizedBox(height: CompanionSpacing.md),
 
@@ -1021,10 +1099,10 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Runtime Status: $stateName',
+                        stateHeadline,
                         style: CompanionTypography.bodySmall.copyWith(
                           color: stateColor,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       Text(
@@ -1032,80 +1110,81 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
                         style: CompanionTypography.caption
                             .copyWith(color: ext?.textSecondary),
                       ),
+                      if (status != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          'Profile: ${(status.appliedProfile ?? status.requestedProfile).toUpperCase()} '
+                          '· ${status.appliedContextSize ?? status.contextSize} ctx '
+                          '· ${status.appliedGpuLayers ?? status.gpuLayers} GPU layers '
+                          '· Vision ${(status.appliedMmprojOffload ?? status.requestedMmprojOffload) ? 'GPU' : 'CPU'}',
+                          style: CompanionTypography.caption.copyWith(
+                            color: ext?.textMuted,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
-                if (status?.appliedProfile != null)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? Colors.white.withValues(alpha: 0.08)
-                          : Colors.black.withValues(alpha: 0.05),
-                      borderRadius: CompanionRadius.borderSm,
-                    ),
-                    child: Text(
-                      'Profile: ${status!.appliedProfile}',
-                      style: CompanionTypography.caption.copyWith(
-                        color: ext?.textPrimary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
+                if (status?.modelLoaded == true ||
+                    status?.activeModel != null ||
+                    status?.runtimeState == 'MODEL_READY')
+                  OutlinedButton.icon(
+                    key: const Key('unload_model_status_button'),
+                    onPressed: (_isExecutingModelAction ||
+                            widget.chatController?.isGenerating == true)
+                        ? null
+                        : _unloadModel,
+                    icon: const Icon(Icons.eject_rounded, size: 14),
+                    label: const Text('Unload Model / Free VRAM'),
                   ),
               ],
             ),
           ),
-          if (status?.modelLoaded == true ||
-              status?.activeModel != null ||
-              status?.runtimeState == 'MODEL_READY') ...[
-            const SizedBox(height: CompanionSpacing.sm),
-            Align(
-              alignment: Alignment.centerRight,
-              child: OutlinedButton.icon(
-                key: const Key('unload_model_status_button'),
-                onPressed: (_isExecutingModelAction ||
-                        widget.chatController?.isGenerating == true)
-                    ? null
-                    : _unloadModel,
-                icon: const Icon(Icons.eject_rounded, size: 14),
-                label: const Text('Unload Model / Free VRAM'),
-              ),
-            ),
-          ],
-          const SizedBox(height: CompanionSpacing.lg),
-
+          const SizedBox(height: CompanionSpacing.md),
           Text(
-            'Available Models in Registry',
+            'Performance Mode',
             style: CompanionTypography.bodySmall.copyWith(
               color: ext?.textSecondary,
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: CompanionSpacing.sm),
-
-          if (_isLoadingModelCatalog &&
-              (_registryEntries == null || _registryEntries!.isEmpty))
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(CompanionSpacing.lg),
-                child: CircularProgressIndicator(),
-              ),
-            )
-          else if (_registryEntries == null || _registryEntries!.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: CompanionSpacing.md),
-              child: Text(
-                'No models registered. Check models directory or verify runtime connection.',
-                style:
-                    CompanionTypography.bodySmall.copyWith(color: ext?.textMuted),
-              ),
-            )
-          else
-            ..._registryEntries!
-                .map((entry) => _buildModelEntryCard(entry, ext, isDark)),
+          const SizedBox(height: CompanionSpacing.xs),
+          Wrap(
+            spacing: CompanionSpacing.sm,
+            runSpacing: CompanionSpacing.xs,
+            children: [
+              for (final option in const [
+                ('eco', 'Eco · 2K ctx · Low VRAM / CPU'),
+                ('balanced', 'Balanced · 4K ctx · GPU'),
+                ('maximum', 'Maximum · 8K ctx · High VRAM'),
+              ])
+                ChoiceChip(
+                  key: Key('profile_chip_${option.$1}'),
+                  label: Text(option.$2),
+                  selected: (status?.requestedProfile ?? 'balanced') == option.$1,
+                  onSelected: (_isUpdatingProfile || _isExecutingModelAction)
+                      ? null
+                      : (_) => _updateHardwareProfile(option.$1),
+                ),
+            ],
+          ),
+          const SizedBox(height: CompanionSpacing.md),
+          Text(
+            'Context Length (CTX)',
+            style: CompanionTypography.bodySmall.copyWith(
+              color: ext?.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: CompanionSpacing.xs),
+          ..._buildContextSelectorControls(
+            context,
+            ext: ext,
+            isDark: isDark,
+            status: status,
+            reqCtxMode: reqCtxMode,
+          ),
 
           if (_modelActionMessage != null) ...[
             const SizedBox(height: CompanionSpacing.md),
@@ -1140,8 +1219,7 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
                   ),
                   if (_isStillLoading ||
                       (_modelActionMessage?.contains('still loading') == true) ||
-                      (_modelActionMessage?.contains('could not be confirmed') ==
-                          true)) ...[
+                      (_modelActionMessage?.contains('timed out') == true)) ...[
                     const SizedBox(width: CompanionSpacing.sm),
                     TextButton.icon(
                       onPressed: _refreshModelStatusOnly,
@@ -1158,6 +1236,504 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
     );
   }
 
+  Widget _buildAddLocalModelsCard(
+    BuildContext context,
+    CompanionThemeExtension? ext,
+    bool isDark,
+  ) {
+    final inboxPath = (_importInboxDir != null && _importInboxDir!.isNotEmpty)
+        ? _importInboxDir
+        : _inboxScanResult?.inboxDir;
+    final candidates =
+        _inboxScanResult?.candidates ?? const <ModelImportCandidateOut>[];
+    final warnings = _inboxScanResult?.warnings ?? const <String>[];
+
+    return SoftGlassPanel(
+      padding: const EdgeInsets.all(CompanionSpacing.xl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: CompanionSpacing.sm,
+            runSpacing: CompanionSpacing.xs,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.add_box_outlined, size: 20, color: ext?.accent),
+                  const SizedBox(width: CompanionSpacing.sm),
+                  Flexible(
+                    child: Text(
+                      'Add Local Models',
+                      style: CompanionTypography.titleMedium
+                          .copyWith(color: ext?.textPrimary),
+                    ),
+                  ),
+                ],
+              ),
+              if (_libraryRoot != null && _libraryRoot!.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.06)
+                        : Colors.black.withValues(alpha: 0.04),
+                    borderRadius: CompanionRadius.borderSm,
+                  ),
+                  child: Text(
+                    'Library: $_libraryRoot',
+                    style: CompanionTypography.caption
+                        .copyWith(color: ext?.textSecondary, fontSize: 11),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: CompanionSpacing.xs),
+          Text(
+            'Pick a .gguf model (and optional mmproj-*.gguf for vision) or place files in your Model Inbox folder, then install them into your library.',
+            style: CompanionTypography.caption
+                .copyWith(color: ext?.textSecondary),
+          ),
+          const SizedBox(height: CompanionSpacing.md),
+          Wrap(
+            spacing: CompanionSpacing.sm,
+            runSpacing: CompanionSpacing.sm,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              FilledButton.icon(
+                key: const Key('browse_model_files_button'),
+                onPressed: (_isScanningInbox || _installingRelativePath != null)
+                    ? null
+                    : _browseAndStageModelFiles,
+                icon: const Icon(Icons.file_open_rounded, size: 16),
+                label: const Text('Add Model Files...'),
+              ),
+              if (Platform.isWindows)
+                OutlinedButton.icon(
+                  key: const Key('open_inbox_folder_button'),
+                  onPressed: () => _openInboxInExplorer(inboxPath),
+                  icon: const Icon(Icons.folder_open_rounded, size: 16),
+                  label: const Text('Open Inbox Folder'),
+                ),
+              FilledButton.tonalIcon(
+                key: const Key('d6_scan_inbox_button'),
+                onPressed: _isScanningInbox ? null : _scanInbox,
+                icon: _isScanningInbox
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.search_rounded, size: 16),
+                label: const Text('Scan Inbox'),
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Switch(
+                    key: const Key('import_transfer_mode_switch'),
+                    value: _movePickedFiles,
+                    onChanged: (_isScanningInbox || _installingRelativePath != null)
+                        ? null
+                        : (v) => setState(() => _movePickedFiles = v),
+                  ),
+                  Flexible(
+                    child: Text(
+                      _movePickedFiles
+                          ? 'Move picked files (save space)'
+                          : 'Copy picked files (keep original)',
+                      style: CompanionTypography.caption
+                          .copyWith(color: ext?.textSecondary),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          if (warnings.isNotEmpty) ...[
+            const SizedBox(height: CompanionSpacing.md),
+            for (final w in warnings)
+              Container(
+                margin: const EdgeInsets.only(bottom: CompanionSpacing.xs),
+                padding: const EdgeInsets.all(CompanionSpacing.sm),
+                decoration: BoxDecoration(
+                  color: (ext?.warning ?? CompanionColors.warning)
+                      .withValues(alpha: 0.14),
+                  borderRadius: CompanionRadius.borderSm,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.info_outline_rounded,
+                      size: 16,
+                      color: ext?.warning ?? CompanionColors.warning,
+                    ),
+                    const SizedBox(width: CompanionSpacing.sm),
+                    Expanded(
+                      child: Text(
+                        w,
+                        style: CompanionTypography.caption
+                            .copyWith(color: ext?.textPrimary),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+          if (_inboxScanResult != null) ...[
+            const SizedBox(height: CompanionSpacing.md),
+            if (candidates.isEmpty)
+              Text(
+                'No installable .gguf models found in your inbox yet. Use "Add Model Files..." or open the inbox folder.',
+                style: CompanionTypography.bodySmall
+                    .copyWith(color: ext?.textMuted),
+              )
+            else
+              for (final cand in candidates) ...[
+                NeumorphicSurface(
+                  surfaceType: NeumorphicSurfaceType.recessed,
+                  borderRadius: CompanionRadius.borderMd,
+                  padding: const EdgeInsets.all(CompanionSpacing.md),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              cand.primaryFilename,
+                              style: CompanionTypography.bodyMedium.copyWith(
+                                color: ext?.textPrimary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: (cand.artifactValid
+                                      ? (cand.preflight.status == 'recommended'
+                                          ? (ext?.success ??
+                                              CompanionColors.success)
+                                          : cand.preflight.status ==
+                                                  'supported_with_warning'
+                                              ? (ext?.warning ??
+                                                  CompanionColors.warning)
+                                              : (ext?.danger ??
+                                                  CompanionColors.danger))
+                                      : (ext?.danger ?? CompanionColors.danger))
+                                  .withValues(alpha: 0.15),
+                              borderRadius: CompanionRadius.borderSm,
+                            ),
+                            child: Text(
+                              cand.artifactValid
+                                  ? '${cand.preflight.status == 'recommended' ? 'GOOD FIT' : (cand.preflight.status == 'supported_with_warning' ? 'TIGHT FIT' : 'HEAVY FOR GPU')} (~${cand.preflight.estimatedVramGb.toStringAsFixed(1)} GB VRAM)'
+                                  : 'INVALID GGUF',
+                              style: CompanionTypography.caption.copyWith(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Wrap(
+                        spacing: CompanionSpacing.xs,
+                        runSpacing: CompanionSpacing.xs,
+                        children: [
+                          _buildInfoChip(
+                              '${cand.sizeGb.toStringAsFixed(2)} GB', ext),
+                          if (cand.architecture.isNotEmpty)
+                            _buildInfoChip(cand.architecture, ext),
+                          if (cand.quantization.isNotEmpty)
+                            _buildInfoChip(cand.quantization, ext),
+                          if (cand.reasoningMode == 'always_on')
+                            _buildInfoChip('Reasoning (Always On)', ext,
+                                highlight: true)
+                          else if (cand.reasoningMode == 'toggleable')
+                            _buildInfoChip('Reasoning (Toggleable)', ext,
+                                highlight: true),
+                          Builder(
+                            builder: (_) {
+                              final selectedMmproj = _selectedCandidateMmproj
+                                      .containsKey(cand.relativePath)
+                                  ? _selectedCandidateMmproj[cand.relativePath]
+                                  : cand.companionMmprojRelativePath;
+                              if (selectedMmproj != null) {
+                                final fileName = selectedMmproj.split('/').last;
+                                return _buildInfoChip(
+                                  'Vision Paired: $fileName',
+                                  ext,
+                                  highlight: true,
+                                );
+                              }
+                              if (cand.expectsVisionProjector) {
+                                return _buildInfoChip(
+                                  'Vision model — mmproj missing',
+                                  ext,
+                                );
+                              }
+                              return const SizedBox.shrink();
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: CompanionSpacing.xs),
+                      Text(
+                        cand.validationError ?? cand.preflight.message,
+                        style: CompanionTypography.caption
+                            .copyWith(color: ext?.textSecondary),
+                      ),
+                      if (cand.artifactValid) ...[
+                        Builder(
+                          builder: (_) {
+                            final ctxStrip = _buildCandidateCtxSummary(cand);
+                            if (ctxStrip == null) {
+                              return const SizedBox.shrink();
+                            }
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                ctxStrip,
+                                style: CompanionTypography.caption.copyWith(
+                                  color: ext?.textMuted,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        if (cand.compatibleMmprojPaths.isNotEmpty ||
+                            cand.companionMmprojRelativePath != null) ...[
+                          const SizedBox(height: CompanionSpacing.sm),
+                          Builder(
+                            builder: (ctx) {
+                              final selectedMmproj = _selectedCandidateMmproj
+                                      .containsKey(cand.relativePath)
+                                  ? _selectedCandidateMmproj[cand.relativePath]
+                                  : cand.companionMmprojRelativePath;
+                              final orderedPaths = <String>[
+                                if (cand.companionMmprojRelativePath != null)
+                                  cand.companionMmprojRelativePath!,
+                                for (final p in cand.compatibleMmprojPaths)
+                                  if (p != cand.companionMmprojRelativePath) p,
+                              ];
+                              final dropdownValue =
+                                  orderedPaths.contains(selectedMmproj)
+                                      ? selectedMmproj
+                                      : null;
+                              String displayMmproj(String relPath) {
+                                final name = relPath.split('/').last;
+                                return relPath ==
+                                        cand.companionMmprojRelativePath
+                                    ? '$name (Auto-matched)'
+                                    : name;
+                              }
+
+                              return InputDecorator(
+                                decoration: const InputDecoration(
+                                  labelText: 'Vision Projector (mmproj)',
+                                  border: OutlineInputBorder(),
+                                  isDense: true,
+                                  contentPadding: EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 6),
+                                ),
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<String?>(
+                                    key: Key(
+                                        'candidate_mmproj_dropdown_${cand.suggestedModelId}'),
+                                    value: dropdownValue,
+                                    isExpanded: true,
+                                    isDense: true,
+                                    items: [
+                                      for (final relPath in orderedPaths)
+                                        DropdownMenuItem<String?>(
+                                          value: relPath,
+                                          child: Text(
+                                            displayMmproj(relPath),
+                                            style: CompanionTypography.bodySmall
+                                                .copyWith(
+                                                    color: ext?.textPrimary),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      DropdownMenuItem<String?>(
+                                        value: null,
+                                        child: Text(
+                                          'None (Install Text-only)',
+                                          style: CompanionTypography.bodySmall
+                                              .copyWith(
+                                                  color: ext?.textSecondary),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                    onChanged: _installingRelativePath != null
+                                        ? null
+                                        : (nextVal) {
+                                            setState(() {
+                                              _selectedCandidateMmproj[
+                                                  cand.relativePath] = nextVal;
+                                            });
+                                          },
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                        const SizedBox(height: CompanionSpacing.sm),
+                        Wrap(
+                          spacing: CompanionSpacing.sm,
+                          runSpacing: CompanionSpacing.sm,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(
+                                minWidth: 180,
+                                maxWidth: 280,
+                              ),
+                              child: TextField(
+                                controller:
+                                    _candidateNameControllers[cand.relativePath],
+                                decoration: const InputDecoration(
+                                  labelText: 'Display Name',
+                                  border: OutlineInputBorder(),
+                                  isDense: true,
+                                ),
+                              ),
+                            ),
+                            Builder(
+                              builder: (_) {
+                                final selectedMmproj = _selectedCandidateMmproj
+                                        .containsKey(cand.relativePath)
+                                    ? _selectedCandidateMmproj[
+                                        cand.relativePath]
+                                    : cand.companionMmprojRelativePath;
+                                if (!cand.expectsVisionProjector ||
+                                    selectedMmproj != null) {
+                                  return const SizedBox.shrink();
+                                }
+                                return OutlinedButton.icon(
+                                  key: Key(
+                                      'attach_mmproj_${cand.suggestedModelId}'),
+                                  onPressed: (_isScanningInbox ||
+                                          _installingRelativePath != null)
+                                      ? null
+                                      : () {
+                                          _selectedCandidateMmproj
+                                              .remove(cand.relativePath);
+                                          _browseAndStageModelFiles(
+                                            dialogTitle:
+                                                'Select Vision Projector (mmproj-*.gguf) for ${cand.displayName}',
+                                          );
+                                        },
+                                  icon: const Icon(
+                                      Icons.add_photo_alternate_outlined,
+                                      size: 15),
+                                  label: const Text('Attach mmproj...'),
+                                );
+                              },
+                            ),
+                            OutlinedButton(
+                              onPressed: () => _updateHardwareProfile(
+                                  cand.preflight.recommendedProfile),
+                              child: Text(
+                                'Use ${cand.preflight.recommendedProfile}',
+                              ),
+                            ),
+                            FilledButton.tonalIcon(
+                              key: Key(
+                                  'd6_install_candidate_${cand.suggestedModelId}'),
+                              onPressed: _installingRelativePath != null
+                                  ? null
+                                  : () => _installCandidate(cand),
+                              icon: _installingRelativePath == cand.relativePath
+                                  ? const SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2),
+                                    )
+                                  : const Icon(Icons.download_done_rounded,
+                                      size: 16),
+                              label: const Text('Install Bundle'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: CompanionSpacing.sm),
+              ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModelRegistryListCard(
+    BuildContext context,
+    CompanionThemeExtension? ext,
+    bool isDark,
+  ) {
+    return SoftGlassPanel(
+      padding: const EdgeInsets.all(CompanionSpacing.xl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.auto_awesome_mosaic_outlined,
+                  size: 20, color: ext?.accent),
+              const SizedBox(width: CompanionSpacing.sm),
+              Expanded(
+                child: Text(
+                  'Available Models',
+                  style: CompanionTypography.titleMedium
+                      .copyWith(color: ext?.textPrimary),
+                ),
+              ),
+              Text(
+                '${_registryEntries?.length ?? 0} total',
+                style: CompanionTypography.caption
+                    .copyWith(color: ext?.textSecondary),
+              ),
+            ],
+          ),
+          const SizedBox(height: CompanionSpacing.md),
+          if (_isLoadingModelCatalog &&
+              (_registryEntries == null || _registryEntries!.isEmpty))
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(CompanionSpacing.lg),
+                child: CircularProgressIndicator(),
+              ),
+            )
+          else if (_registryEntries == null || _registryEntries!.isEmpty)
+            Padding(
+              padding:
+                  const EdgeInsets.symmetric(vertical: CompanionSpacing.md),
+              child: Text(
+                'No models found yet. Add a model above or verify your Library folder.',
+                style:
+                    CompanionTypography.bodySmall.copyWith(color: ext?.textMuted),
+              ),
+            )
+          else
+            ..._registryEntries!
+                .map((entry) => _buildModelEntryCard(entry, ext, isDark)),
+        ],
+      ),
+    );
+  }
+
   Widget _buildModelEntryCard(
     ModelRegistryEntry entry,
     CompanionThemeExtension? ext,
@@ -1169,6 +1745,14 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
         (_modelStatus?.selectedModel == entry.runtimeModelId);
     final isReady = _modelStatus?.runtimeState == 'MODEL_READY' &&
         _isTargetModelActive(entry, _modelStatus?.activeModel);
+
+    final subtitleParts = <String>[
+      if (entry.architecture.isNotEmpty) entry.architecture.toUpperCase(),
+      if (entry.parameters.isNotEmpty) entry.parameters,
+      if (entry.quantization.isNotEmpty) entry.quantization,
+      if (entry.estimatedVramGb > 0)
+        '~${entry.estimatedVramGb.toStringAsFixed(1)} GB VRAM',
+    ];
 
     return Container(
       margin: const EdgeInsets.only(bottom: CompanionSpacing.md),
@@ -1194,58 +1778,49 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
           Row(
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            entry.displayName,
-                            style: CompanionTypography.bodyMedium.copyWith(
-                              color: ext?.textPrimary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        if (isReady || isSelected) ...[
-                          const SizedBox(width: CompanionSpacing.xs),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isReady
-                                  ? (ext?.success ?? CompanionColors.success)
-                                  : (ext?.accent ?? Colors.blue),
-                              borderRadius: CompanionRadius.borderSm,
-                            ),
-                            child: Text(
-                              isReady ? 'ACTIVE' : 'SELECTED (NOT LOADED)',
-                              style: CompanionTypography.caption.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 10,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'ID: ${entry.id} | File: ${entry.primaryFile}',
-                      style: CompanionTypography.caption
-                          .copyWith(color: ext?.textSecondary),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
+                child: Text(
+                  entry.displayName,
+                  style: CompanionTypography.bodyMedium.copyWith(
+                    color: ext?.textPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
+              if (isReady || isSelected) ...[
+                const SizedBox(width: CompanionSpacing.xs),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isReady
+                        ? (ext?.success ?? CompanionColors.success)
+                        : (ext?.accent ?? Colors.blue),
+                    borderRadius: CompanionRadius.borderSm,
+                  ),
+                  child: Text(
+                    isReady ? 'ACTIVE' : 'SELECTED',
+                    style: CompanionTypography.caption.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 10,
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
+          if (subtitleParts.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              subtitleParts.join(' · '),
+              style: CompanionTypography.caption
+                  .copyWith(color: ext?.textSecondary),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
           const SizedBox(height: CompanionSpacing.sm),
 
           Wrap(
@@ -1270,6 +1845,10 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
                 active: entry.hasReasoning,
                 ext: ext,
               ),
+              if (entry.sizeGb != null)
+                _buildInfoChip('${entry.sizeGb!.toStringAsFixed(1)} GB disk', ext),
+              if (entry.isInstalled)
+                _buildInfoChip('Added by You', ext, highlight: true),
               _buildValidationBadge(entry, ext),
             ],
           ),
@@ -1282,6 +1861,28 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
               spacing: CompanionSpacing.sm,
               runSpacing: CompanionSpacing.xs,
               children: [
+                if (entry.recommendedProfiles.isNotEmpty)
+                  OutlinedButton.icon(
+                    key: Key('apply_recommended_profile_${entry.id}'),
+                    onPressed: _isUpdatingProfile
+                        ? null
+                        : () =>
+                            _updateHardwareProfile(entry.recommendedProfiles.first),
+                    icon: const Icon(Icons.tune_rounded, size: 14),
+                    label: Text(
+                        'Apply Recommended (${entry.recommendedProfiles.first})'),
+                  ),
+                if (entry.isInstalled)
+                  OutlinedButton.icon(
+                    key: Key('delete_model_${entry.id}'),
+                    onPressed: (isReady ||
+                            _deletingModelId == entry.id ||
+                            _isExecutingModelAction)
+                        ? null
+                        : () => _deleteInstalledModel(entry),
+                    icon: const Icon(Icons.delete_outline_rounded, size: 14),
+                    label: const Text('Uninstall'),
+                  ),
                 if (isReady)
                   OutlinedButton.icon(
                     key: Key('unload_model_entry_${entry.id}'),
@@ -1317,6 +1918,512 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
     );
   }
 
+  Widget _buildAdvancedDiagnosticsAccordion(
+    BuildContext context,
+    CompanionThemeExtension? ext,
+    bool isDark,
+  ) {
+    final isDisconnected =
+        _modelStatus == null || _modelStatus!.provider == 'unknown';
+    final isExpanded =
+        _advancedUserToggled ? _advancedExpanded : isDisconnected;
+
+    return SoftGlassPanel(
+      padding: const EdgeInsets.all(CompanionSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            key: const Key('runtime_advanced_toggle'),
+            borderRadius: CompanionRadius.borderMd,
+            onTap: () {
+              setState(() {
+                _advancedUserToggled = true;
+                _advancedExpanded = !isExpanded;
+              });
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Icon(Icons.developer_mode_rounded,
+                      size: 18, color: ext?.textSecondary),
+                  const SizedBox(width: CompanionSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      'Advanced: Runtime Connection & Process Diagnostics',
+                      style: CompanionTypography.bodyMedium.copyWith(
+                        color: ext?.textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    isExpanded
+                        ? Icons.expand_less_rounded
+                        : Icons.expand_more_rounded,
+                    color: ext?.textSecondary,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (isExpanded) ...[
+            const SizedBox(height: CompanionSpacing.lg),
+            _buildRuntimeConnectionCard(context, ext, isDark),
+            const SizedBox(height: CompanionSpacing.lg),
+            _buildRuntimeSupervisionCard(context, ext, isDark),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRuntimeSupervisionCard(
+    BuildContext context,
+    CompanionThemeExtension? ext,
+    bool isDark,
+  ) {
+    final runtime = widget.controller.runtimeProcessState;
+    final lockfile = widget.controller.runtimeLockfileData;
+
+    final isLoopback = runtime?.isLocalSupervised ?? true;
+    final modeLabel =
+        isLoopback ? 'Local Loopback (Supervised)' : 'Remote Host (Unmanaged)';
+    final statusLabel = runtime?.status.name ?? 'Dormant / Standalone';
+    final pidLabel = !isLoopback
+        ? 'N/A (Remote Host)'
+        : (runtime?.pid != null
+            ? '${runtime!.pid}'
+            : (lockfile?.pid != null ? '${lockfile!.pid}' : 'None'));
+    final portLabel = '${runtime?.port ?? 8000}';
+
+    final localAppData =
+        Platform.environment['LOCALAPPDATA'] ?? r'C:\Users\<user>\AppData\Local';
+    final lockPath = !isLoopback
+        ? 'N/A (Remote Host - Unmanaged)'
+        : '$localAppData\\AI Companion\\runtime.lock';
+    final logPath = !isLoopback
+        ? 'N/A (Remote Host - Unmanaged)'
+        : '$localAppData\\AI Companion\\Logs\\runtime.log';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.developer_board_rounded, size: 18, color: ext?.accent),
+            const SizedBox(width: CompanionSpacing.sm),
+            Expanded(
+              child: Text(
+                'Runtime Process Supervision',
+                style: CompanionTypography.titleMedium
+                    .copyWith(color: ext?.textPrimary),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: CompanionSpacing.xs),
+        Text(
+          'Local process lifecycle, kernel file lock synchronization, and process provenance',
+          style: CompanionTypography.caption
+              .copyWith(color: ext?.textSecondary),
+        ),
+        const SizedBox(height: CompanionSpacing.md),
+        NeumorphicSurface(
+          surfaceType: NeumorphicSurfaceType.recessed,
+          borderRadius: CompanionRadius.borderMd,
+          padding: const EdgeInsets.all(CompanionSpacing.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildDiagnosticRow('Supervision Mode', modeLabel, ext),
+              const Divider(height: CompanionSpacing.md),
+              _buildDiagnosticRow('Supervision Status', statusLabel, ext),
+              const Divider(height: CompanionSpacing.md),
+              _buildDiagnosticRow('Process ID (PID)', pidLabel, ext),
+              const Divider(height: CompanionSpacing.md),
+              _buildDiagnosticRow('Bound Port', portLabel, ext),
+              const Divider(height: CompanionSpacing.md),
+              _buildDiagnosticRow('Kernel Lockfile', lockPath, ext),
+              const Divider(height: CompanionSpacing.md),
+              _buildDiagnosticRow('Detached Logfile', logPath, ext),
+              if (runtime?.diagnosticMessage != null &&
+                  runtime!.diagnosticMessage!.trim().isNotEmpty) ...[
+                const Divider(height: CompanionSpacing.md),
+                _buildDiagnosticRow(
+                  'Diagnostic Detail',
+                  runtime.diagnosticMessage!.trim(),
+                  ext,
+                  maxLines: 4,
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (isLoopback &&
+            widget.runtimeCoordinator != null &&
+            (runtime == null ||
+                (!runtime.isOperational &&
+                    runtime.status != RuntimeStatus.launching))) ...[
+          const SizedBox(height: CompanionSpacing.md),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FilledButton.tonalIcon(
+              key: const Key('runtime_supervision_retry_button'),
+              onPressed: _isStartingRuntime ? null : _startOrRetryLocalRuntime,
+              icon: _isStartingRuntime
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.play_arrow_rounded, size: 16),
+              label: Text(
+                _isStartingRuntime
+                    ? 'Starting Runtime...'
+                    : 'Start / Retry Local Runtime',
+              ),
+            ),
+          ),
+        ],
+        const SizedBox(height: CompanionSpacing.sm),
+        Text(
+          'Lifecycle Invariant: Closing the window (×) hides to system tray and leaves the background runtime running. Exiting Companion performs authenticated cooperative shutdown of the host runtime.',
+          style: CompanionTypography.caption.copyWith(
+            color: ext?.textMuted,
+            fontStyle: FontStyle.italic,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDiagnosticRow(
+    String label,
+    String value,
+    CompanionThemeExtension? ext, {
+    int maxLines = 1,
+  }) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment:
+          maxLines > 1 ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+      children: [
+        Text(
+          label,
+          style: CompanionTypography.bodySmall.copyWith(
+            color: ext?.textSecondary,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(width: CompanionSpacing.md),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            maxLines: maxLines,
+            style: CompanionTypography.bodySmall.copyWith(
+              color: ext?.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRuntimeConnectionCard(
+    BuildContext context,
+    CompanionThemeExtension? ext,
+    bool isDark,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.link_rounded, size: 18, color: ext?.accent),
+            const SizedBox(width: CompanionSpacing.sm),
+            Expanded(
+              child: Text(
+                'Runtime Connection & Pairing',
+                style: CompanionTypography.titleMedium
+                    .copyWith(color: ext?.textPrimary),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: CompanionSpacing.xs),
+        Text(
+          'Configure Local AI Runtime endpoint URL and DPAPI-protected pairing secret',
+          style: CompanionTypography.caption
+              .copyWith(color: ext?.textSecondary),
+        ),
+        const SizedBox(height: CompanionSpacing.md),
+
+        Text(
+          'Runtime Host URL',
+          style: CompanionTypography.bodySmall.copyWith(
+            color: ext?.textSecondary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: CompanionSpacing.xs),
+        NeumorphicSurface(
+          surfaceType: NeumorphicSurfaceType.recessed,
+          borderRadius: CompanionRadius.borderMd,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+          child: TextField(
+            key: const Key('runtime_host_url_input'),
+            controller: _urlController,
+            onChanged: (_) => _urlDirty = true,
+            style: CompanionTypography.bodyMedium
+                .copyWith(color: ext?.textPrimary),
+            decoration: InputDecoration(
+              border: InputBorder.none,
+              isDense: true,
+              hintText: 'http://127.0.0.1:8000',
+              hintStyle:
+                  CompanionTypography.bodyMedium.copyWith(color: ext?.textMuted),
+            ),
+          ),
+        ),
+        const SizedBox(height: CompanionSpacing.md),
+
+        Text(
+          'Pairing Token (Protected by Windows DPAPI)',
+          style: CompanionTypography.bodySmall.copyWith(
+            color: ext?.textSecondary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: CompanionSpacing.xs),
+        NeumorphicSurface(
+          surfaceType: NeumorphicSurfaceType.recessed,
+          borderRadius: CompanionRadius.borderMd,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  key: const Key('runtime_pairing_token_input'),
+                  controller: _tokenController,
+                  onChanged: (_) => _tokenDirty = true,
+                  obscureText: _obscureToken,
+                  style: CompanionTypography.bodyMedium
+                      .copyWith(color: ext?.textPrimary),
+                  decoration: InputDecoration(
+                    border: InputBorder.none,
+                    isDense: true,
+                    hintText: 'Enter pairing token...',
+                    hintStyle: CompanionTypography.bodyMedium
+                        .copyWith(color: ext?.textMuted),
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: Icon(
+                  _obscureToken
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                  size: 18,
+                  color: ext?.textSecondary,
+                ),
+                tooltip: _obscureToken ? 'Show token' : 'Hide token',
+                onPressed: () {
+                  setState(() {
+                    _obscureToken = !_obscureToken;
+                  });
+                },
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: CompanionSpacing.md),
+
+        Wrap(
+          spacing: CompanionSpacing.md,
+          runSpacing: CompanionSpacing.sm,
+          children: [
+            NeumorphicButton(
+              child: Text(_isTesting ? 'Testing...' : 'Test Connection'),
+              icon: const Icon(Icons.network_check_rounded, size: 16),
+              size: NeumorphicButtonSize.sm,
+              onPressed: _isTesting
+                  ? null
+                  : () async {
+                      setState(() {
+                        _isTesting = true;
+                        _testConnectionResult = null;
+                      });
+                      final candidateUrl = _urlController.text.trim();
+                      final candidateToken = _tokenController.text.trim();
+                      CompanionClient? probeClient;
+                      try {
+                        CompanionClient.validateBaseUrl(candidateUrl);
+                        final probeStore =
+                            InMemoryCredentialStore(candidateToken);
+                        probeClient = CompanionClient(
+                          baseUrl: candidateUrl,
+                          credentialStore: probeStore,
+                        );
+                        final health = await probeClient.getHealth();
+                        if (!mounted) return;
+                        if (health.status == 'healthy') {
+                          if (candidateToken.isEmpty) {
+                            setState(() {
+                              _testConnectionResult =
+                                  'Reachable: Health OK (200), but pairing token is missing.';
+                            });
+                          } else {
+                            try {
+                              final auth = await probeClient.verifyAuth();
+                              if (!mounted) return;
+                              setState(() {
+                                _testConnectionResult =
+                                    'Verified: Health OK (200), pairing token verified (${auth.tokenType}).';
+                              });
+                            } catch (authErr) {
+                              if (!mounted) return;
+                              setState(() {
+                                _testConnectionResult =
+                                    'Reachable: Health OK (200), but authentication verification failed: $authErr';
+                              });
+                            }
+                          }
+                        } else {
+                          setState(() {
+                            _testConnectionResult =
+                                'Runtime reported unhealthy status: ${health.status}';
+                          });
+                        }
+                      } catch (e) {
+                        if (!mounted) return;
+                        setState(() {
+                          _testConnectionResult = 'Connection failed: $e';
+                        });
+                      } finally {
+                        probeClient?.close();
+                        if (mounted) {
+                          setState(() {
+                            _isTesting = false;
+                          });
+                        }
+                      }
+                    },
+            ),
+            NeumorphicButton(
+              child: const Text('Apply & Save'),
+              icon: const Icon(Icons.save_rounded, size: 16),
+              size: NeumorphicButtonSize.sm,
+              onPressed: () async {
+                final candidateUrl = _urlController.text.trim();
+                final candidateToken = _tokenController.text.trim();
+                try {
+                  CompanionClient.validateBaseUrl(candidateUrl);
+                  await _clientSettings.writeHostUrl(candidateUrl);
+                  if (candidateToken.isNotEmpty) {
+                    await _credentialStore.writeToken(candidateToken);
+                  }
+                  if (widget.chatController != null) {
+                    try {
+                      await widget.chatController!.updateConfiguration(
+                        baseUrl: candidateUrl,
+                        pairingToken: candidateToken,
+                      );
+                    } catch (_) {}
+                  }
+                  if (widget.runtimeCoordinator != null) {
+                    if (!mounted) return;
+                    setState(() {
+                      _testConnectionResult =
+                          'Settings persisted. Verifying connection to runtime...';
+                    });
+                    widget.runtimeCoordinator!.updateConfiguration(
+                      newBaseUrl: candidateUrl,
+                      credentialStore: _credentialStore,
+                    );
+                    final runtimeState =
+                        await widget.runtimeCoordinator!.ensureRuntimeReady(
+                      timeout: const Duration(seconds: 30),
+                    );
+                    if (mounted) {
+                      setState(() {
+                        switch (runtimeState.status) {
+                          case RuntimeStatus.readyAndAuthenticated:
+                            _testConnectionResult =
+                                'Configuration saved: Connected and authenticated.';
+                            break;
+                          case RuntimeStatus.reachableUnauthenticated:
+                            _testConnectionResult =
+                                'Configuration saved: Connected, but authentication failed.';
+                            break;
+                          case RuntimeStatus.alienPortConflict:
+                            _testConnectionResult =
+                                'Configuration saved: Port conflict detected on ${runtimeState.port}.';
+                            break;
+                          default:
+                            final diag = runtimeState.diagnosticMessage;
+                            final suffix = (diag != null && diag.isNotEmpty)
+                                ? ': $diag'
+                                : '';
+                            _testConnectionResult =
+                                'Configuration saved, but could not connect to runtime (${runtimeState.status.name})$suffix';
+                            break;
+                        }
+                      });
+                    }
+                  } else {
+                    if (mounted) {
+                      setState(() {
+                        _testConnectionResult = 'Configuration saved.';
+                      });
+                    }
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    setState(() {
+                      _testConnectionResult =
+                          'Failed to apply configuration: ${_formatError(e)}';
+                    });
+                  }
+                }
+              },
+            ),
+          ],
+        ),
+
+        if (_testConnectionResult != null) ...[
+          const SizedBox(height: CompanionSpacing.md),
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: CompanionSpacing.md,
+              vertical: CompanionSpacing.sm,
+            ),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.05)
+                  : Colors.black.withValues(alpha: 0.04),
+              borderRadius: CompanionRadius.borderMd,
+              border: Border.all(
+                color: ext?.borderSubtle ?? Colors.transparent,
+              ),
+            ),
+            child: Text(
+              _testConnectionResult!,
+              style: CompanionTypography.caption.copyWith(
+                color: ext?.textPrimary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _buildBadge({
     required String label,
     required IconData icon,
@@ -1343,14 +2450,16 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
                 : (ext?.textMuted ?? Colors.grey),
           ),
           const SizedBox(width: 4),
-          Text(
-            label,
-            style: CompanionTypography.caption.copyWith(
-              color: active
-                  ? (ext?.accent ?? Colors.blue)
-                  : (ext?.textMuted ?? Colors.grey),
-              fontWeight: active ? FontWeight.w600 : FontWeight.w400,
-              fontSize: 11,
+          Flexible(
+            child: Text(
+              label,
+              style: CompanionTypography.caption.copyWith(
+                color: active
+                    ? (ext?.accent ?? Colors.blue)
+                    : (ext?.textMuted ?? Colors.grey),
+                fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                fontSize: 11,
+              ),
             ),
           ),
         ],
@@ -1390,6 +2499,320 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
         style: CompanionTypography.caption.copyWith(
           color: color,
           fontWeight: FontWeight.w600,
+          fontSize: 11,
+        ),
+      ),
+    );
+  }
+
+  List<ContextOptionAssessmentOut> _fallbackContextOptions(String profile) {
+    final p = profile.toLowerCase();
+    final autoTok = p == 'eco' ? 2048 : (p == 'maximum' ? 8192 : 4096);
+    final autoK = '${autoTok ~/ 1024}K';
+    return [
+      ContextOptionAssessmentOut(
+        mode: 'profile',
+        label: 'Auto (${p[0].toUpperCase()}${p.substring(1)} · $autoK)',
+        contextTokens: autoTok,
+        estimatedVramGb: 3.0,
+        status: 'good_fit',
+        selectable: true,
+        exceedsModelMax: false,
+        reason: 'Follows active performance mode.',
+      ),
+      const ContextOptionAssessmentOut(
+        mode: '2k',
+        label: '2K (2,048)',
+        contextTokens: 2048,
+        estimatedVramGb: 2.5,
+        status: 'good_fit',
+        selectable: true,
+        exceedsModelMax: false,
+        reason: 'Low memory footprint.',
+      ),
+      const ContextOptionAssessmentOut(
+        mode: '4k',
+        label: '4K (4,096)',
+        contextTokens: 4096,
+        estimatedVramGb: 3.0,
+        status: 'good_fit',
+        selectable: true,
+        exceedsModelMax: false,
+        reason: 'Standard balanced context window.',
+      ),
+      const ContextOptionAssessmentOut(
+        mode: '8k',
+        label: '8K (8,192)',
+        contextTokens: 8192,
+        estimatedVramGb: 4.5,
+        status: 'tight',
+        selectable: true,
+        exceedsModelMax: false,
+        reason: 'Moderate memory use.',
+      ),
+      const ContextOptionAssessmentOut(
+        mode: '16k',
+        label: '16K (16,384)',
+        contextTokens: 16384,
+        estimatedVramGb: 7.2,
+        status: 'blocked',
+        selectable: false,
+        exceedsModelMax: false,
+        reason: 'High VRAM/RAM risk on <= 8 GB GPUs.',
+      ),
+      const ContextOptionAssessmentOut(
+        mode: '32k',
+        label: '32K (32,768)',
+        contextTokens: 32768,
+        estimatedVramGb: 9.8,
+        status: 'blocked',
+        selectable: false,
+        exceedsModelMax: false,
+        reason: 'High VRAM/RAM overflow risk.',
+      ),
+      const ContextOptionAssessmentOut(
+        mode: 'model_max',
+        label: 'Model Max (32K+)',
+        contextTokens: 32768,
+        estimatedVramGb: 9.8,
+        status: 'blocked',
+        selectable: false,
+        exceedsModelMax: false,
+        reason: 'Uses model maximum context limit.',
+      ),
+    ];
+  }
+
+  List<Widget> _buildContextSelectorControls(
+    BuildContext context, {
+    required CompanionThemeExtension? ext,
+    required bool isDark,
+    required ModelStatusResponse? status,
+    required String reqCtxMode,
+  }) {
+    final profile = status?.requestedProfile ?? 'balanced';
+    final rawOptions =
+        status?.contextOptions ?? const <ContextOptionAssessmentOut>[];
+    final options =
+        rawOptions.isNotEmpty ? rawOptions : _fallbackContextOptions(profile);
+    final safeValue =
+        options.any((o) => o.mode == reqCtxMode) ? reqCtxMode : 'profile';
+    final activeOpt = options.firstWhere(
+      (o) => o.mode == safeValue,
+      orElse: () => options.first,
+    );
+    final isBlockedActive = safeValue != 'profile' && !activeOpt.selectable;
+
+    Color statusColor(ContextOptionAssessmentOut opt) {
+      if (opt.status == 'good_fit') {
+        return ext?.success ?? CompanionColors.success;
+      }
+      if (opt.status == 'tight') {
+        return ext?.warning ?? CompanionColors.warning;
+      }
+      return ext?.danger ?? CompanionColors.danger;
+    }
+
+    String statusBadge(ContextOptionAssessmentOut opt) {
+      if (opt.exceedsModelMax) return 'Exceeds Model Max';
+      if (opt.status == 'blocked') return 'Overflow Risk';
+      if (opt.status == 'tight') return 'Tight · Slower';
+      return 'Good Fit';
+    }
+
+    return [
+      InputDecorator(
+        decoration: const InputDecoration(
+          border: OutlineInputBorder(),
+          isDense: true,
+          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            key: const Key('ctx_mode_dropdown'),
+            value: safeValue,
+            isExpanded: true,
+            isDense: true,
+            selectedItemBuilder: (ctx) => [
+              for (final opt in options)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '${opt.label} — ${statusBadge(opt)}',
+                    style: CompanionTypography.bodySmall
+                        .copyWith(color: ext?.textPrimary),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+            ],
+            items: [
+              for (final opt in options)
+                DropdownMenuItem<String>(
+                  key: Key('ctx_dropdown_item_${opt.mode}'),
+                  value: opt.mode,
+                  enabled: opt.selectable ||
+                      (_allowUnsafeExperimentalCtx && !opt.exceedsModelMax),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          opt.label,
+                          style: CompanionTypography.bodySmall.copyWith(
+                            color: (opt.selectable ||
+                                    (_allowUnsafeExperimentalCtx &&
+                                        !opt.exceedsModelMax))
+                                ? ext?.textPrimary
+                                : ext?.textMuted,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        statusBadge(opt),
+                        style: CompanionTypography.caption.copyWith(
+                          color: statusColor(opt),
+                          fontWeight: FontWeight.w600,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+            onChanged: (_isUpdatingProfile || _isExecutingModelAction)
+                ? null
+                : (nextMode) {
+                    if (nextMode != null && nextMode != safeValue) {
+                      _updateHardwareProfile(profile, contextMode: nextMode);
+                    }
+                  },
+          ),
+        ),
+      ),
+      const SizedBox(height: CompanionSpacing.xs),
+      Text(
+        activeOpt.reason,
+        style: CompanionTypography.caption.copyWith(color: ext?.textSecondary),
+      ),
+      const SizedBox(height: CompanionSpacing.xs),
+      Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Switch(
+            key: const Key('unsafe_ctx_toggle'),
+            value: _allowUnsafeExperimentalCtx,
+            onChanged: (v) => setState(() => _allowUnsafeExperimentalCtx = v),
+          ),
+          Flexible(
+            child: Text(
+              'Allow unsafe experimental CTX (unlock VRAM overflow options)',
+              style: CompanionTypography.caption
+                  .copyWith(color: ext?.textSecondary),
+            ),
+          ),
+        ],
+      ),
+      if (isBlockedActive ||
+          _allowUnsafeExperimentalCtx ||
+          safeValue == '16k' ||
+          safeValue == '32k' ||
+          safeValue == 'model_max') ...[
+        const SizedBox(height: CompanionSpacing.xs),
+        Container(
+          padding: const EdgeInsets.all(CompanionSpacing.sm),
+          decoration: BoxDecoration(
+            color: (isBlockedActive
+                    ? (ext?.danger ?? CompanionColors.danger)
+                    : (ext?.warning ?? CompanionColors.warning))
+                .withValues(alpha: 0.14),
+            borderRadius: CompanionRadius.borderSm,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                isBlockedActive
+                    ? Icons.error_outline_rounded
+                    : Icons.warning_amber_rounded,
+                size: 16,
+                color: isBlockedActive
+                    ? (ext?.danger ?? CompanionColors.danger)
+                    : (ext?.warning ?? CompanionColors.warning),
+              ),
+              const SizedBox(width: CompanionSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isBlockedActive
+                          ? 'Active context (${activeOpt.label}) exceeds safe limits for the current model/hardware (${activeOpt.reason}). Reset to Auto or reload with caution.'
+                          : 'Experimental CTX enabled: large context windows sharply increase VRAM & RAM usage and may spill to system memory or slow down on <= 8 GB GPUs. Reload the model to apply.',
+                      style: CompanionTypography.caption
+                          .copyWith(color: ext?.textPrimary),
+                    ),
+                    if (isBlockedActive) ...[
+                      const SizedBox(height: CompanionSpacing.xs),
+                      TextButton.icon(
+                        key: const Key('ctx_reset_auto_button'),
+                        onPressed:
+                            (_isUpdatingProfile || _isExecutingModelAction)
+                                ? null
+                                : () => _updateHardwareProfile(
+                                      profile,
+                                      contextMode: 'profile',
+                                    ),
+                        icon: const Icon(Icons.restore_rounded, size: 14),
+                        label: const Text('Reset to Auto (Profile Default)'),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ];
+  }
+
+  String? _buildCandidateCtxSummary(ModelImportCandidateOut cand) {
+    if (cand.contextOptions.isEmpty) return null;
+    final parts = <String>[];
+    for (final modeKey in const ['2k', '4k', '8k', '16k', '32k']) {
+      final matches = cand.contextOptions.where((o) => o.mode == modeKey);
+      if (matches.isEmpty) continue;
+      final opt = matches.first;
+      final shortTag = opt.exceedsModelMax
+          ? 'Max Limit'
+          : (opt.status == 'good_fit'
+              ? 'Good'
+              : (opt.status == 'tight' ? 'Tight' : 'Overflow'));
+      parts.add('${modeKey.toUpperCase()}: $shortTag');
+    }
+    return parts.isEmpty ? null : 'CTX Fit — ${parts.join(' · ')}';
+  }
+
+  Widget _buildInfoChip(
+    String text,
+    CompanionThemeExtension? ext, {
+    bool highlight = false,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: highlight
+            ? (ext?.accent.withValues(alpha: 0.14) ??
+                Colors.blue.withValues(alpha: 0.14))
+            : Colors.grey.withValues(alpha: 0.10),
+        borderRadius: CompanionRadius.borderSm,
+      ),
+      child: Text(
+        text,
+        style: CompanionTypography.caption.copyWith(
+          color: highlight ? (ext?.accent ?? Colors.blue) : (ext?.textSecondary),
+          fontWeight: FontWeight.w500,
           fontSize: 11,
         ),
       ),

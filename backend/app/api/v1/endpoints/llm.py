@@ -1,5 +1,6 @@
 """Endpoints for LLM model inspection and chat completions."""
 
+import asyncio
 import json
 import time
 import uuid
@@ -28,10 +29,24 @@ from app.schemas.llm import (
     ModelSelectRequest,
     ModelStatusResponse,
 )
-from app.schemas.model_registry import ModelRegistryEntry
+from app.schemas.model_registry import (
+    ModelDeleteOut,
+    ModelImportInstallOut,
+    ModelImportInstallRequest,
+    ModelImportScanOut,
+    ModelRegistryEntry,
+)
 from app.services.host_config import save_model_selection
 from app.services.llm.base import BaseLLMProvider
 from app.services.llm.manager import get_llm_provider
+from app.services.model_import import (
+    ModelImportConflictError,
+    ModelImportNotFoundError,
+    ModelImportValidationError,
+    delete_installed_model,
+    install_inbox_candidate,
+    scan_import_inbox,
+)
 from app.services.model_registry import build_model_list, find_model_registry_entry
 
 router = APIRouter()
@@ -173,14 +188,70 @@ async def update_profile(
     request: ModelProfileUpdateRequest,
     provider: BaseLLMProvider = Depends(get_llm_provider),
 ) -> ModelStatusResponse:
-    """Switch hardware profile (eco, balanced, maximum)."""
-    success = await provider.set_profile(request.profile)
+    """Switch hardware profile (eco, balanced, maximum) and optional experimental context mode."""
+    import inspect
+
+    set_fn = provider.set_profile
+    sig = inspect.signature(set_fn)
+    if "context_mode" in sig.parameters:
+        success = await set_fn(request.profile, context_mode=request.context_mode)
+    else:
+        success = await set_fn(request.profile)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid hardware profile '{request.profile}'.",
+            detail=f"Invalid hardware profile or context mode '{request.profile}'.",
         )
     return await provider.get_status()
+
+
+@router.post(
+    "/models/import/scan",
+    response_model=ModelImportScanOut,
+    summary="Scan D6 local model import inbox (Host Admin)",
+    dependencies=[Depends(require_host_admin)],
+)
+async def scan_model_import_inbox() -> ModelImportScanOut:
+    """Manually scan IMPORT_INBOX_DIR for valid GGUF bundles and preflight hardware suitability."""
+    return await asyncio.to_thread(scan_import_inbox)
+
+
+@router.post(
+    "/models/import/install",
+    response_model=ModelImportInstallOut,
+    summary="Verify, stage, and atomically install a local D6 GGUF bundle (Host Admin)",
+    dependencies=[Depends(require_host_admin)],
+)
+async def install_model_from_inbox(
+    request: ModelImportInstallRequest,
+) -> ModelImportInstallOut:
+    """Install a confirmed D6 model bundle into MODEL_LIBRARY_DIR and Schema v3 models.json."""
+    try:
+        return await asyncio.to_thread(install_inbox_candidate, request)
+    except ModelImportNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from None
+    except ModelImportConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from None
+    except ModelImportValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from None
+
+
+@router.delete(
+    "/models/registry/{model_id}",
+    response_model=ModelDeleteOut,
+    summary="Uninstall a D6 user-imported model from MODEL_LIBRARY_DIR (Host Admin)",
+    dependencies=[Depends(require_host_admin)],
+)
+async def delete_model_from_registry(model_id: str) -> ModelDeleteOut:
+    """Remove an installed model bundle cleanly while protecting factory models and loaded runtimes."""
+    try:
+        return await delete_installed_model(model_id)
+    except ModelImportNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from None
+    except ModelImportConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from None
+    except ModelImportValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from None
 
 
 @router.post(

@@ -1,5 +1,6 @@
 """Tests for canonical paths, engine lifecycle ordering, and SQLite PRAGMAs (8P.3B, 8P.3E, 8P.3F)."""
 
+import json
 from pathlib import Path
 import pytest
 from sqlalchemy import text
@@ -25,11 +26,29 @@ def test_canonical_paths_derived_from_one_root(tmp_path):
     assert paths.INSTALLED_REGISTRY_PATH == data_root.resolve() / "library" / "registry" / "models.json"
     assert paths.VOICE_LIBRARY_DIR == data_root.resolve() / "library" / "voices"
     assert paths.ATTACHMENT_DIR == data_root.resolve() / "attachments"
-    assert paths.IMPORT_INBOX_DIR == data_root.resolve() / "imports" / "inbox"
-    assert paths.IMPORT_STAGING_DIR == data_root.resolve() / "imports" / "staging"
+    assert paths.IMPORT_INBOX_DIR == data_root.resolve() / "library" / "imports" / "inbox"
+    assert paths.IMPORT_STAGING_DIR == data_root.resolve() / "library" / "imports" / "staging"
     assert paths.CHARACTER_DIR == data_root.resolve() / "characters"
     assert paths.MEMORY_DIR == data_root.resolve() / "memory"
     assert paths.BACKUP_DIR == data_root.resolve() / "backups"
+    assert paths.APP_INSTALL_ROOT.is_absolute()
+    assert paths.CACHE_ROOT.is_absolute()
+    assert paths.LOG_ROOT.is_absolute()
+
+
+def test_canonical_paths_honors_relocated_library_root(tmp_path):
+    """Explicit or resolved library_root relocates models, registry, voices, and D6 imports."""
+    data_root = (tmp_path / "DataRoot").resolve()
+    lib_root = (tmp_path / "RelocatedLibrary").resolve()
+    paths = get_canonical_paths(data_root, library_root=lib_root)
+
+    assert paths.DATABASE_DIR == data_root / "database"
+    assert paths.LIBRARY_DIR == lib_root
+    assert paths.MODEL_LIBRARY_DIR == lib_root / "models" / "llm"
+    assert paths.INSTALLED_REGISTRY_PATH == lib_root / "registry" / "models.json"
+    assert paths.VOICE_LIBRARY_DIR == lib_root / "voices"
+    assert paths.IMPORT_INBOX_DIR == lib_root / "imports" / "inbox"
+    assert paths.IMPORT_STAGING_DIR == lib_root / "imports" / "staging"
 
 
 def test_factory_model_root_remains_in_repo_and_aliases_match():
@@ -109,3 +128,145 @@ async def test_corrupt_locator_prevents_alternate_runtime_initialization(monkeyp
         assert not (tmp_path / "AI Companion" / "Data").exists()
     finally:
         await db_session.dispose_database_runtime()
+
+
+@pytest.mark.asyncio
+async def test_system_storage_endpoints_and_library_relocation(client, host_admin_headers, monkeypatch, tmp_path):
+    """PC-HOST-004: /system/storage reports 5 roots and relocates LIBRARY_ROOT safely."""
+    from unittest.mock import AsyncMock, MagicMock
+    from app.services.llm.manager import llm_manager
+
+    unauth = await client.get("/api/v1/system/storage")
+    assert unauth.status_code == 401
+
+    resp = await client.get("/api/v1/system/storage", headers=host_admin_headers)
+    assert resp.status_code == 200
+    payload = resp.json()
+    root_keys = {item["key"] for item in payload["roots"]}
+    assert root_keys == {"app_install", "data", "library", "cache", "log"}
+    assert "bootstrap_path" in payload
+
+    # Test relocation blocked when COMPANION_LIBRARY_ROOT env override is active
+    monkeypatch.setenv("COMPANION_LIBRARY_ROOT", str(tmp_path / "LockedEnvLib"))
+    env_blocked = await client.put(
+        "/api/v1/system/storage/library-root",
+        json={"new_library_root": str(tmp_path / "TargetLib"), "migrate_existing_assets": True},
+        headers=host_admin_headers,
+    )
+    assert env_blocked.status_code == 409
+    monkeypatch.delenv("COMPANION_LIBRARY_ROOT", raising=False)
+
+    # Test relocation blocked when model is loaded
+    loaded_provider = MagicMock()
+    loaded_provider.is_loaded.return_value = True
+    loaded_provider.has_active_generation = False
+    original_provider = llm_manager._provider
+    try:
+        llm_manager.set_provider(loaded_provider)
+        loaded_blocked = await client.put(
+            "/api/v1/system/storage/library-root",
+            json={"new_library_root": str(tmp_path / "TargetLib"), "migrate_existing_assets": True},
+            headers=host_admin_headers,
+        )
+        assert loaded_blocked.status_code == 409
+
+        # Idle Core-managed router gets stopped before moving assets
+        idle_provider = MagicMock()
+        idle_provider.is_loaded.return_value = False
+        idle_provider.has_active_generation = False
+        idle_provider.unload_model = AsyncMock(return_value=True)
+        llm_manager.set_provider(idle_provider)
+
+        # Also verify relocation blocked with 409 when COMPANION_DATA_ROOT redirects away from bootstrap
+        data_env_blocked = await client.put(
+            "/api/v1/system/storage/library-root",
+            json={"new_library_root": str(tmp_path / "TargetLib2"), "migrate_existing_assets": False},
+            headers=host_admin_headers,
+        )
+        assert data_env_blocked.status_code == 409
+
+        # Switch to isolated bootstrap-backed storage and validate path checks + migration
+        fake_local = tmp_path / "RelocLocalApp"
+        monkeypatch.setenv("LOCALAPPDATA", str(fake_local))
+        monkeypatch.delenv("COMPANION_DATA_ROOT", raising=False)
+        from app.core.storage import write_bootstrap
+        write_bootstrap(data_root=(tmp_path / "RelocData").resolve(), bootstrap_path=fake_local / "AI Companion" / "bootstrap.json")
+
+        # Reject relative and overlapping paths with 400
+        rel_bad = await client.put(
+            "/api/v1/system/storage/library-root",
+            json={"new_library_root": "./rel", "migrate_existing_assets": False},
+            headers=host_admin_headers,
+        )
+        assert rel_bad.status_code == 400
+
+        db_overlap = await client.put(
+            "/api/v1/system/storage/library-root",
+            json={"new_library_root": str(settings.DATABASE_DIR), "migrate_existing_assets": False},
+            headers=host_admin_headers,
+        )
+        assert db_overlap.status_code == 400
+
+        cache_overlap = await client.put(
+            "/api/v1/system/storage/library-root",
+            json={"new_library_root": str(settings.CACHE_ROOT), "migrate_existing_assets": False},
+            headers=host_admin_headers,
+        )
+        assert cache_overlap.status_code == 400
+
+        log_overlap = await client.put(
+            "/api/v1/system/storage/library-root",
+            json={"new_library_root": str(settings.LOG_ROOT), "migrate_existing_assets": False},
+            headers=host_admin_headers,
+        )
+        assert log_overlap.status_code == 400
+
+        settings.IMPORT_INBOX_DIR.mkdir(parents=True, exist_ok=True)
+        (settings.IMPORT_INBOX_DIR / "migrated.gguf").write_bytes(b"GGUFmigrated")
+
+        new_lib = (tmp_path / "RelocatedLib").resolve()
+        ok = await client.put(
+            "/api/v1/system/storage/library-root",
+            json={"new_library_root": str(new_lib), "migrate_existing_assets": True},
+            headers=host_admin_headers,
+        )
+        assert ok.status_code == 200
+        idle_provider.unload_model.assert_awaited()
+        data = ok.json()
+        assert data["library_root"] == str(new_lib)
+        assert (new_lib / "imports" / "inbox" / "migrated.gguf").read_bytes() == b"GGUFmigrated"
+        boot = json.loads((fake_local / "AI Companion" / "bootstrap.json").read_text(encoding="utf-8"))
+        assert boot["library_root"] == str(new_lib)
+    finally:
+        llm_manager.set_provider(original_provider)
+
+
+@pytest.mark.asyncio
+async def test_autostart_put_blocked_during_shutdown_while_get_stays_exempt(client, host_admin_headers):
+    """Major 3a regression: GET /system/autostart stays exempt during shutdown; PUT returns 503."""
+    from unittest.mock import patch
+    from app.core.runtime_lifecycle import runtime_lifecycle
+    from app.schemas.health import AutostartStatusOut
+
+    fake_status = AutostartStatusOut(
+        supported=True,
+        enabled=False,
+        task_registered=False,
+        task_name="AICompanionAutostart",
+        minimized_to_tray=True,
+        status_detail="Disabled",
+    )
+    runtime_lifecycle._is_shutting_down = True
+    try:
+        with patch("app.api.v1.endpoints.health.WindowsAutostartService.get_status", return_value=fake_status):
+            get_resp = await client.get("/api/v1/system/autostart", headers=host_admin_headers)
+        assert get_resp.status_code == 200
+
+        put_resp = await client.put(
+            "/api/v1/system/autostart",
+            json={"enabled": True, "minimized_to_tray": True},
+            headers=host_admin_headers,
+        )
+        assert put_resp.status_code == 503
+    finally:
+        runtime_lifecycle.reset()

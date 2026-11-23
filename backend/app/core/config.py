@@ -68,7 +68,13 @@ class Settings(BaseSettings):
     MODELS_DIR: Path = BASE_DIR.parent / "models"
     LLAMA_MODELS_DIR: Path = BASE_DIR.parent / "models" / "vision"
 
-    # Persistent Storage Root & Canonical Paths (Batch 8P.3B)
+    HOST_DEDICATED_VRAM_GB: float = 8.0
+    COMPANION_LIBRARY_ROOT: Optional[str] = None
+    COMPANION_CACHE_ROOT: Optional[str] = None
+    COMPANION_LOG_ROOT: Optional[str] = None
+    COMPANION_APP_INSTALL_ROOT: Optional[str] = None
+
+    # Persistent Storage Root & Canonical Paths (Batch 8P.3B + PC-HOST-004 Five Roots)
     @property
     def COMPANION_DATA_ROOT(self) -> Path:
         """Resolved persistent storage root (precedence: env -> bootstrap -> OS default)."""
@@ -77,8 +83,33 @@ class Settings(BaseSettings):
 
     @property
     def canonical_paths(self):
-        from app.core.storage import get_canonical_paths
-        return get_canonical_paths(self.COMPANION_DATA_ROOT)
+        from app.core.storage import (
+            get_canonical_paths,
+            resolve_app_install_root,
+            resolve_cache_root,
+            resolve_library_root,
+            resolve_log_root,
+        )
+        data_root = self.COMPANION_DATA_ROOT
+        return get_canonical_paths(
+            data_root=data_root,
+            library_root=resolve_library_root(data_root, env_override=self.COMPANION_LIBRARY_ROOT),
+            cache_root=resolve_cache_root(env_override=self.COMPANION_CACHE_ROOT),
+            log_root=resolve_log_root(env_override=self.COMPANION_LOG_ROOT),
+            app_install_root=resolve_app_install_root(env_override=self.COMPANION_APP_INSTALL_ROOT),
+        )
+
+    @property
+    def APP_INSTALL_ROOT(self) -> Path:
+        return self.canonical_paths.APP_INSTALL_ROOT
+
+    @property
+    def CACHE_ROOT(self) -> Path:
+        return self.canonical_paths.CACHE_ROOT
+
+    @property
+    def LOG_ROOT(self) -> Path:
+        return self.canonical_paths.LOG_ROOT
 
     @property
     def DATABASE_DIR(self) -> Path:

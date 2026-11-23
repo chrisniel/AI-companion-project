@@ -1316,3 +1316,131 @@ def test_find_model_registry_entry_and_resolve_consistency():
 
     # 8. Unresolved identifier fallback in resolve_runtime_model_id preserved
     assert resolve_runtime_model_id("unregistered-stem.gguf", entries=entries) == "unregistered-stem"
+
+
+def _pack_gguf_kv(key: str, val_type: int, val: Any) -> bytes:
+    import struct
+
+    def _str(s: str) -> bytes:
+        b = s.encode("utf-8")
+        return struct.pack("<Q", len(b)) + b
+
+    out = bytearray(_str(key))
+    out.extend(struct.pack("<I", val_type))
+    if val_type == 4:
+        out.extend(struct.pack("<I", int(val)))
+    elif val_type == 8:
+        out.extend(_str(str(val)))
+    elif val_type == 9:
+        elem_type, items = val
+        out.extend(struct.pack("<I", elem_type))
+        out.extend(struct.pack("<Q", len(items)))
+        for item in items:
+            if elem_type == 4:
+                out.extend(struct.pack("<I", int(item)))
+            elif elem_type == 8:
+                out.extend(_str(str(item)))
+    return bytes(out)
+
+
+def test_gguf_parser_skips_bulk_tokenizer_arrays_and_reads_trailing_ftype(tmp_path):
+    """Real GGUFs place huge tokenizer.ggml.* arrays & chat_template before general.file_type."""
+    import struct
+    from app.services.model_registry import read_gguf_metadata
+
+    kvs = [
+        ("general.architecture", 8, "qwen3vl"),
+        ("qwen3vl.context_length", 4, 32768),
+        ("general.type", 8, "model"),
+        ("general.name", 8, "Qwen3-VL-2B-Instruct"),
+        ("general.size_label", 8, "2B"),
+        ("general.license", 8, "apache-2.0"),
+        ("tokenizer.ggml.tokens", 9, (8, [f"tok_{i}" for i in range(1200)])),
+        ("tokenizer.ggml.token_type", 9, (4, [1 for _ in range(1200)])),
+        ("tokenizer.chat_template", 8, "{% for m in messages %}{{ m.content }}{% endfor %}" + ("x" * 3000)),
+        ("general.file_type", 4, 15),  # Q4_K_M AFTER huge tokenizer blobs
+        ("general.quantization_version", 4, 2),
+    ]
+    buf = bytearray(b"GGUF")
+    buf.extend(struct.pack("<I", 3))
+    buf.extend(struct.pack("<Q", 0))
+    buf.extend(struct.pack("<Q", len(kvs)))
+    for k, vt, v in kvs:
+        buf.extend(_pack_gguf_kv(k, vt, v))
+
+    gguf_file = tmp_path / "Qwen3-VL-2B-Instruct-Q4_K_M.gguf"
+    gguf_file.write_bytes(bytes(buf))
+    meta = read_gguf_metadata(gguf_file)
+
+    assert meta.architecture == "qwen3vl"
+    assert meta.context_length == 32768
+    assert meta.quantization == "Q4_K_M"
+    assert meta.quantization_version == 2
+    assert meta.has_chat_template is True
+    assert meta.model_name == "Qwen3-VL-2B-Instruct"
+    assert meta.size_label == "2B"
+    assert meta.license_name == "apache-2.0"
+
+
+def test_gguf_parser_rejects_out_of_bounds_skip_offset(tmp_path):
+    """Truncated tokenizer.ggml.* claiming skip past EOF must fail closed."""
+    import struct
+    from app.services.model_registry import read_gguf_metadata
+
+    buf = bytearray(b"GGUF")
+    buf.extend(struct.pack("<I", 3))
+    buf.extend(struct.pack("<Q", 0))
+    buf.extend(struct.pack("<Q", 1))
+    key_b = b"tokenizer.ggml.token_type"
+    buf.extend(struct.pack("<Q", len(key_b)) + key_b)
+    buf.extend(struct.pack("<I", 9))  # array
+    buf.extend(struct.pack("<I", 4))  # uint32 elements
+    buf.extend(struct.pack("<Q", 500000))  # 2 MB claim, truncated immediately
+    bad_file = tmp_path / "bad_skip.gguf"
+    bad_file.write_bytes(bytes(buf))
+
+    meta = read_gguf_metadata(bad_file)
+    assert meta.architecture == ""
+    assert meta.quantization == ""
+
+
+def test_installed_registry_preserves_capability_provenance(monkeypatch, tmp_path):
+    """Schema v3 installed entries keep persisted capability_provenance (e.g. detected) across build_model_list."""
+    from app.core.config import settings
+    from app.services.model_registry import build_model_list
+
+    monkeypatch.setenv("COMPANION_DATA_ROOT", str(tmp_path / "Data"))
+    models_dir = settings.MODEL_LIBRARY_DIR
+    bundle_dir = models_dir / "custom-vision-2b"
+    bundle_dir.mkdir(parents=True)
+    (bundle_dir / "custom.gguf").write_bytes(b"GGUFdummy")
+    (bundle_dir / "mmproj-custom.gguf").write_bytes(b"GGUFproj")
+
+    reg_path = settings.INSTALLED_REGISTRY_PATH
+    reg_path.parent.mkdir(parents=True, exist_ok=True)
+    reg_payload = {
+        "_schema_version": "3",
+        "models": [
+            {
+                "id": "custom-vision-2b",
+                "display_name": "Custom Vision 2B",
+                "primary_file": "custom-vision-2b/custom.gguf",
+                "companion_files": [{"role": "mmproj", "path": "custom-vision-2b/mmproj-custom.gguf"}],
+                "capabilities": ["chat", "vision"],
+                "capability_provenance": [
+                    {"capability": "chat", "supported": True, "provenance": "detected"},
+                    {"capability": "vision", "supported": True, "provenance": "detected"},
+                ],
+                "runtime_model_id": "custom-vision-2b",
+            }
+        ],
+    }
+    reg_path.write_text(json.dumps(reg_payload), encoding="utf-8")
+
+    entries = build_model_list()
+    installed = next((e for e in entries if e.manifest.id == "custom-vision-2b"), None)
+    assert installed is not None
+    assert installed.registry_source == "installed"
+    provenance_map = {cp.capability.value: cp.provenance.value for cp in installed.library_state.capability_provenance}
+    assert provenance_map["chat"] == "detected"
+    assert provenance_map["vision"] == "detected"

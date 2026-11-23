@@ -61,6 +61,7 @@ class DesktopSettingsController extends ChangeNotifier {
   final StorageDiagnosticReader _diagnosticReader;
   RuntimeProcessState? _runtimeProcessState;
   RuntimeLockfileData? _runtimeLockfileData;
+  int _storageRevision = 0;
 
   ThemeMode get themeMode => _themeMode;
   AccentPreset get accentPreset => _accentPreset;
@@ -71,6 +72,13 @@ class DesktopSettingsController extends ChangeNotifier {
   StorageDiagnosticReader get diagnosticReader => _diagnosticReader;
   RuntimeProcessState? get runtimeProcessState => _runtimeProcessState;
   RuntimeLockfileData? get runtimeLockfileData => _runtimeLockfileData;
+  int get storageRevision => _storageRevision;
+
+  /// Broadcasts storage root relocations so Model / Inbox sections drop stale paths.
+  void notifyStorageChanged() {
+    _storageRevision++;
+    notifyListeners();
+  }
 
   void updateRuntimeState(RuntimeProcessState state, [RuntimeLockfileData? lockfileData]) {
     _runtimeProcessState = state;

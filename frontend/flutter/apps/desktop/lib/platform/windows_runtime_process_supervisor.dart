@@ -323,7 +323,7 @@ class WindowsRuntimeProcessSupervisor {
   Future<ProcessDiscoveryResult> discoverRuntimeProcesses({
     required int port,
     required String expectedExecutable,
-    Duration timeout = const Duration(seconds: 3),
+    Duration timeout = const Duration(seconds: 12),
   }) async {
     if (port <= 0) {
       return const ProcessDiscoveryResult(
@@ -539,7 +539,7 @@ class WindowsRuntimeProcessSupervisor {
   Future<int?> findActiveRuntimeProcess({
     required int port,
     required String expectedExecutable,
-    Duration timeout = const Duration(seconds: 3),
+    Duration timeout = const Duration(seconds: 10),
   }) async {
     final result = await discoverRuntimeProcesses(
       port: port,

@@ -4,8 +4,9 @@
 
 #include "flutter/generated_plugin_registrant.h"
 
-FlutterWindow::FlutterWindow(const flutter::DartProject& project)
-    : project_(project) {}
+FlutterWindow::FlutterWindow(const flutter::DartProject& project,
+                             bool start_hidden)
+    : project_(project), start_hidden_(start_hidden) {}
 
 FlutterWindow::~FlutterWindow() {}
 
@@ -27,12 +28,29 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
   audio_channel_ = std::make_unique<WindowsAudioChannel>(
       flutter_controller_->engine()->messenger(), GetHandle());
+  shell_channel_ = std::make_unique<WindowsShellChannel>(
+      flutter_controller_->engine()->messenger(), GetHandle());
   toast_channel_ = std::make_unique<WindowsToastChannel>(
       flutter_controller_->engine()->messenger(), GetHandle());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
-    this->Show();
+    // DesktopLifecycleCoordinator owns showing, hiding, and maximizing via
+    // window_manager before runApp(). Never invoke Win32Window::Show()
+    // (SW_SHOWNORMAL) here because SW_SHOWNORMAL un-maximizes a maximized
+    // window back to its restored default bounds on the first Flutter frame.
+    HWND hwnd = this->GetHandle();
+    if (!this->start_hidden_ && hwnd != nullptr && !::IsWindowVisible(hwnd)) {
+      WINDOWPLACEMENT wp{};
+      wp.length = static_cast<UINT>(sizeof(WINDOWPLACEMENT));
+      if (::IsZoomed(hwnd) ||
+          (::GetWindowPlacement(hwnd, &wp) &&
+           wp.showCmd == static_cast<UINT>(SW_SHOWMAXIMIZED))) {
+        ::ShowWindow(hwnd, SW_SHOWMAXIMIZED);
+      } else {
+        ::ShowWindow(hwnd, SW_SHOW);
+      }
+    }
   });
 
   // Flutter can complete the first frame before the "show window" callback is
@@ -46,6 +64,9 @@ bool FlutterWindow::OnCreate() {
 void FlutterWindow::OnDestroy() {
   if (audio_channel_) {
     audio_channel_.reset();
+  }
+  if (shell_channel_) {
+    shell_channel_.reset();
   }
   if (toast_channel_) {
     toast_channel_.reset();

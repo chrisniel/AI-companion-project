@@ -8,13 +8,15 @@
 
 #include "win32_window.h"
 #include "windows_audio_channel.h"
+#include "windows_shell_channel.h"
 #include "windows_toast_channel.h"
 
 // A window that does nothing but host a Flutter view.
 class FlutterWindow : public Win32Window {
  public:
   // Creates a new FlutterWindow hosting a Flutter view running |project|.
-  explicit FlutterWindow(const flutter::DartProject& project);
+  explicit FlutterWindow(const flutter::DartProject& project,
+                         bool start_hidden = false);
   virtual ~FlutterWindow();
 
  protected:
@@ -28,11 +30,17 @@ class FlutterWindow : public Win32Window {
   // The project to run.
   flutter::DartProject project_;
 
+  // Suppresses initial first-frame window show when started minimized to tray.
+  bool start_hidden_ = false;
+
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
 
   // In-process Windows WASAPI audio & hotkey channel.
   std::unique_ptr<WindowsAudioChannel> audio_channel_;
+
+  // In-process Windows COM file & folder picker channel.
+  std::unique_ptr<WindowsShellChannel> shell_channel_;
 
   // In-process Windows WinRT notification channel.
   std::unique_ptr<WindowsToastChannel> toast_channel_;

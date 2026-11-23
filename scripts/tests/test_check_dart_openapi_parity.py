@@ -81,7 +81,7 @@ class TestCheckDartOpenApiParity(unittest.TestCase):
         """CompanionClient must implement all cataloged M1, M2, M3, and M4 native routes."""
         errors, verified = checker.verify_companion_client_implementations(checker.CLIENT_PATH)
         self.assertEqual(errors, [])
-        self.assertEqual(len(verified), 99)
+        self.assertEqual(len(verified), 111)
 
     def test_native_identity_routes_cannot_silently_disappear(self):
         import json
