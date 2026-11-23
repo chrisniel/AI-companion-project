@@ -1,5 +1,6 @@
 """Endpoints for LLM model inspection and chat completions."""
 
+import asyncio
 import json
 import time
 import uuid
@@ -212,7 +213,7 @@ async def update_profile(
 )
 async def scan_model_import_inbox() -> ModelImportScanOut:
     """Manually scan IMPORT_INBOX_DIR for valid GGUF bundles and preflight hardware suitability."""
-    return scan_import_inbox()
+    return await asyncio.to_thread(scan_import_inbox)
 
 
 @router.post(
@@ -226,7 +227,7 @@ async def install_model_from_inbox(
 ) -> ModelImportInstallOut:
     """Install a confirmed D6 model bundle into MODEL_LIBRARY_DIR and Schema v3 models.json."""
     try:
-        return install_inbox_candidate(request)
+        return await asyncio.to_thread(install_inbox_candidate, request)
     except ModelImportNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from None
     except ModelImportConflictError as exc:

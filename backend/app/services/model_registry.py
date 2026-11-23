@@ -457,10 +457,10 @@ def resolve_context_size_for_mode(
     )
     if mode in EXPLICIT_CONTEXT_TOKENS:
         target = EXPLICIT_CONTEXT_TOKENS[mode]
-        return min(target, safe_max) if (safe_max and safe_max >= 2048) else target
+        return min(target, safe_max) if safe_max is not None else target
     if mode == "model_max":
-        return min(max(safe_max or 32768, 4096), 131072)
-    return base_ctx
+        return min(safe_max, 131072) if safe_max is not None else 32768
+    return min(base_ctx, safe_max) if safe_max is not None else base_ctx
 
 
 def assess_hardware_suitability(
@@ -603,7 +603,7 @@ def assess_context_options(
     profile_default_ctx = {"eco": 2048, "balanced": 4096, "maximum": 8192}.get(p, 4096)
     if safe_max is not None and profile_default_ctx > safe_max:
         profile_default_ctx = safe_max
-    model_max_tokens = min(max(safe_max or 32768, 4096), 131072)
+    model_max_tokens = min(safe_max, 131072) if safe_max is not None else 32768
 
     def _ctx_label(mode_key: str, tokens: int) -> str:
         if mode_key == "profile":

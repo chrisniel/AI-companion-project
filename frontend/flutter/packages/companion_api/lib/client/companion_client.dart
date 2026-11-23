@@ -552,7 +552,9 @@ class CompanionClient {
     String modelId, {
     Duration timeout = const Duration(seconds: 30),
   }) async {
-    final uri = baseUri.replace(path: '${baseUri.path}/api/v1/models/registry/$modelId');
+    final uri = baseUri.replace(
+      path: '${baseUri.path}/api/v1/models/registry/${Uri.encodeComponent(modelId)}',
+    );
     final response = await _adminRequest('DELETE', uri, timeout: timeout);
     if (response.statusCode == 200) {
       final dynamic json = jsonDecode(response.body);

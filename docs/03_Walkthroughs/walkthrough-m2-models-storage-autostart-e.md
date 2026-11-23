@@ -4,8 +4,8 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 - Purpose: Documents the implementation and local verification of M2 Batch E (`PC-HOST-004`, `PC-MODEL-001`..`006`, `PC-HOST-002`, `PC-CLIENT-010`, `PC-API-001`): five canonical storage roots with relocatable `LIBRARY_ROOT`, real GGUF header parsing & caching, executable Decision D6 controlled local model import/delete + multi-root `LlamaCppProvider`, standard-user Windows Task Scheduler login autostart with flash-free `--minimized-to-tray` startup, OpenAPI/Dart contract parity, and Desktop Settings UI.
 - Audience: Human Owner, Independent Reviewers, Developers, and Windows Desktop QA.
-- Status: Implemented & Automated-Verified Locally — Manual Windows Host QA Remaining
-- Last Updated: 2026-11-22
+- Status: Implemented, Phase 4 Independent Review Remediated & Automated-Verified Locally — Manual Windows Host QA Remaining
+- Last Updated: 2026-11-23
 
 ---
 
@@ -58,12 +58,21 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 ### Automated Checks
 
-- [x] Slice 7 targeted backend autostart & import isolation check: `backend\.venv\Scripts\python.exe -m pytest backend\tests\test_d6_model_import_and_autostart.py backend\tests\test_import_isolation.py -v -p no:cacheprovider -o log_file=NUL` — **`16 passed in 7.49s`** (exit `0`) *(full backend suite `928 passed, 100 warnings, 4 subtests passed` in `319.76s` verified at Slice 6 `4c71c1e`)*.
+- [x] Full backend pytest suite (including `test_import_isolation.py` & `test_python_dependency_lock.py`): `backend\.venv\Scripts\python.exe -m pytest backend\tests backend\tests\test_import_isolation.py scripts\tests\test_python_dependency_lock.py -q -p no:cacheprovider -o log_file=NUL` — **`932 passed, 100 warnings, 4 subtests passed in 452.07s`** (exit `0`).
 - [x] OpenAPI contract drift check: `backend\.venv\Scripts\python.exe scripts\check_openapi_contract.py --check` — **`86 routes`** (exit `0`).
-- [x] Dart-OpenAPI contract parity: `backend\.venv\Scripts\python.exe scripts\check_dart_openapi_parity.py --check` (**`100/100` schemas, `111/111` native routes**, exit `0`) *(parity script unittest `8/8 OK` in `0.250s` verified at `4c71c1e`)*.
-- [x] Flutter workspace static analysis: `cd frontend\flutter && dart analyze .` (**`No issues found!`**) *(`companion_core` `24/24` and `companion_api` `115/115` verified at `4c71c1e`, unchanged in Slice 7)*.
-- [x] Flutter Desktop test suite & Windows MSVC build: `cd frontend\flutter\apps\desktop && flutter test --no-pub --concurrency=1 test` (**`441/441` passed** in `03:30`, exit `0`) and `flutter build windows --debug --no-pub` (rebuilt `build\windows\x64\runner\Debug\ai_companion_desktop.exe` in `20.1s`, exit `0`).
+- [x] Dart-OpenAPI contract parity & script unittest: `backend\.venv\Scripts\python.exe scripts\check_dart_openapi_parity.py --check` (**`100/100` schemas, `111/111` native routes**, exit `0`) and `backend\.venv\Scripts\python.exe -m unittest scripts\tests\test_check_dart_openapi_parity.py -v` (**`Ran 8 tests in 0.339s — OK`**, exit `0`).
+- [x] Flutter workspace static analysis & SDK tests: `cd frontend\flutter && dart analyze .` (**`No issues found!`**), `companion_core` `dart test` (**`+24: All tests passed!`**), and `companion_api` `dart test` (**`+115: All tests passed!`**).
+- [x] Flutter Desktop test suite & Windows MSVC build: `cd frontend\flutter\apps\desktop && flutter test --no-pub --concurrency=1 test` (**`+442: All tests passed!`** in `02:48`, exit `0`) and `flutter build windows --debug --no-pub` (`Built build\windows\x64\runner\Debug\ai_companion_desktop.exe` in `20.3s`, exit `0`).
 - [x] Diff hygiene check (`git diff --check develop`) — clean exit `0` prior to staging/commit.
+- **Hosted CI Note:** Hosted GitHub Actions CI passed on Slice 7 (`377d3a6`) prior to Phase 4 remediation and re-runs automatically on the pushed Phase 4 remediation commit.
+
+### Phase 4 Independent Review Remediation Summary
+
+- Conducted adversarial Phase 4 Independent Review of `develop..HEAD` and resolved all reported Blocking (3), Major (4), safe Minor, and doc-drift items on the same delivery branch:
+  - Fixed `WindowsAutostartService.get_status()` to tokenize XML `<Arguments>` (`args_text.split()`) rather than substring-matching `--autostart`, and handled `subprocess.SubprocessError` timeouts cleanly as `AutostartConfigurationError`.
+  - Fixed D6 `install_inbox_candidate()` (`"move"` inbox removal moved after atomic `models.json` commit with `target_dir` rollback, `.gguf` suffix validation, underscore-safe `_extract_family_signature()`), `delete_installed_model()` (transitional `409` runtime state guard + offloaded removal), `endpoints/llm.py` & `endpoints/health.py` (`asyncio.to_thread` offloading for scan/install/relocation + `unload_model` preference), `storage.py` (extended `CACHE_ROOT`/`LOG_ROOT`/`BACKUP_DIR`/`ATTACHMENT_DIR`/`CHARACTER_DIR`/`MEMORY_DIR`/`config` overlap & target-symlink checks), and `main.py` (`NON_DB_GET_PATHS` so shutdown blocks `PUT` storage/autostart mutations + CORS `PUT`).
+  - Normalized small-model clamping in `resolve_context_size_for_mode()` & `assess_context_options()`, enriched transitional `LlamaCppProvider.get_status()` snapshots with live context & host hardware telemetry, and hardened `hardware_probe.py` (`CurrentControlSet` + `bytes`-safe VRAM parsing).
+  - Updated `companion_client.dart` (`Uri.encodeComponent(modelId)` on `deleteInstalledModel`) + parity script, `DesktopLifecycleCoordinator.restoreAndFocusWindow()` (re-entry guard), `SettingsGeneralSection` / `SettingsStorageSection` (close uninjected ephemeral `CompanionClient`s), and `SettingsRuntimeSection` (reset stale `Attach mmproj...`/rescan candidate state & dispose removed controllers, wrap narrow-width GPU/VRAM badges cleanly, add `mounted`/ephemeral client disposal guards, and collapse Advanced Diagnostics automatically when connected while keeping `FLUTTER_TEST` offline test behavior intact).
 
 ### Manual / User-Owned Checks (Windows Desktop)
 

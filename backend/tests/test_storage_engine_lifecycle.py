@@ -174,7 +174,7 @@ async def test_system_storage_endpoints_and_library_relocation(client, host_admi
         idle_provider = MagicMock()
         idle_provider.is_loaded.return_value = False
         idle_provider.has_active_generation = False
-        idle_provider.unload = AsyncMock(return_value=True)
+        idle_provider.unload_model = AsyncMock(return_value=True)
         llm_manager.set_provider(idle_provider)
 
         # Also verify relocation blocked with 409 when COMPANION_DATA_ROOT redirects away from bootstrap
@@ -207,6 +207,20 @@ async def test_system_storage_endpoints_and_library_relocation(client, host_admi
         )
         assert db_overlap.status_code == 400
 
+        cache_overlap = await client.put(
+            "/api/v1/system/storage/library-root",
+            json={"new_library_root": str(settings.CACHE_ROOT), "migrate_existing_assets": False},
+            headers=host_admin_headers,
+        )
+        assert cache_overlap.status_code == 400
+
+        log_overlap = await client.put(
+            "/api/v1/system/storage/library-root",
+            json={"new_library_root": str(settings.LOG_ROOT), "migrate_existing_assets": False},
+            headers=host_admin_headers,
+        )
+        assert log_overlap.status_code == 400
+
         settings.IMPORT_INBOX_DIR.mkdir(parents=True, exist_ok=True)
         (settings.IMPORT_INBOX_DIR / "migrated.gguf").write_bytes(b"GGUFmigrated")
 
@@ -217,7 +231,7 @@ async def test_system_storage_endpoints_and_library_relocation(client, host_admi
             headers=host_admin_headers,
         )
         assert ok.status_code == 200
-        idle_provider.unload.assert_awaited()
+        idle_provider.unload_model.assert_awaited()
         data = ok.json()
         assert data["library_root"] == str(new_lib)
         assert (new_lib / "imports" / "inbox" / "migrated.gguf").read_bytes() == b"GGUFmigrated"
@@ -225,3 +239,34 @@ async def test_system_storage_endpoints_and_library_relocation(client, host_admi
         assert boot["library_root"] == str(new_lib)
     finally:
         llm_manager.set_provider(original_provider)
+
+
+@pytest.mark.asyncio
+async def test_autostart_put_blocked_during_shutdown_while_get_stays_exempt(client, host_admin_headers):
+    """Major 3a regression: GET /system/autostart stays exempt during shutdown; PUT returns 503."""
+    from unittest.mock import patch
+    from app.core.runtime_lifecycle import runtime_lifecycle
+    from app.schemas.health import AutostartStatusOut
+
+    fake_status = AutostartStatusOut(
+        supported=True,
+        enabled=False,
+        task_registered=False,
+        task_name="AICompanionAutostart",
+        minimized_to_tray=True,
+        status_detail="Disabled",
+    )
+    runtime_lifecycle._is_shutting_down = True
+    try:
+        with patch("app.api.v1.endpoints.health.WindowsAutostartService.get_status", return_value=fake_status):
+            get_resp = await client.get("/api/v1/system/autostart", headers=host_admin_headers)
+        assert get_resp.status_code == 200
+
+        put_resp = await client.put(
+            "/api/v1/system/autostart",
+            json={"enabled": True, "minimized_to_tray": True},
+            headers=host_admin_headers,
+        )
+        assert put_resp.status_code == 503
+    finally:
+        runtime_lifecycle.reset()

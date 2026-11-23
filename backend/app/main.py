@@ -144,12 +144,15 @@ class RuntimeAdmissionASGIMiddleware:
         "/api/v1/health",
         "/health",
         "/api/v1/system/status",
-        "/api/v1/system/storage",
-        "/api/v1/system/autostart",
         "/api/v1/system/shutdown",
         "/docs",
         "/redoc",
         "/openapi.json",
+    }
+
+    NON_DB_GET_PATHS = {
+        "/api/v1/system/storage",
+        "/api/v1/system/autostart",
     }
 
     def __init__(self, app) -> None:
@@ -162,7 +165,12 @@ class RuntimeAdmissionASGIMiddleware:
 
         method = scope.get("method", "GET")
         path = scope.get("path", "").rstrip("/")
-        is_exempt = path in self.NON_DB_PATHS or path.startswith("/docs") or path.startswith("/openapi")
+        is_exempt = (
+            path in self.NON_DB_PATHS
+            or (method == "GET" and path in self.NON_DB_GET_PATHS)
+            or path.startswith("/docs")
+            or path.startswith("/openapi")
+        )
 
         if is_exempt:
             await self.app(scope, receive, send)
@@ -352,7 +360,7 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.CORS_ORIGINS if isinstance(settings.CORS_ORIGINS, list) else [settings.CORS_ORIGINS],
         allow_credentials=True,
-        allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "X-API-Key", "X-Request-ID", "X-Companion-Bootstrap"],
     )
 

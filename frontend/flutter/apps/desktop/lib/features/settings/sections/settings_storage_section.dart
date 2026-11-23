@@ -100,8 +100,9 @@ class _SettingsStorageSectionState extends State<SettingsStorageSection> {
     setState(() {
       _isLoadingBackend = true;
     });
+    CompanionClient? client;
     try {
-      final client = await _resolveClient();
+      client = await _resolveClient();
       final res = await client.getStorageRoots();
       if (!mounted) return;
       setState(() {
@@ -119,6 +120,10 @@ class _SettingsStorageSectionState extends State<SettingsStorageSection> {
         _isLoadingBackend = false;
         _backendMessage = 'Storage service unavailable: ${_formatError(e)}';
       });
+    } finally {
+      if (widget.client == null) {
+        client?.close();
+      }
     }
   }
 
@@ -141,8 +146,9 @@ class _SettingsStorageSectionState extends State<SettingsStorageSection> {
       _isRelocating = true;
       _backendMessage = 'Moving model & voice library...';
     });
+    CompanionClient? client;
     try {
-      final client = await _resolveClient();
+      client = await _resolveClient();
       final updated = await client.relocateLibraryRoot(
         LibraryRootUpdateRequest(
           newLibraryRoot: target,
@@ -164,6 +170,10 @@ class _SettingsStorageSectionState extends State<SettingsStorageSection> {
         _isRelocating = false;
         _backendMessage = 'Could not move library: ${_formatError(e)}';
       });
+    } finally {
+      if (widget.client == null) {
+        client?.close();
+      }
     }
   }
 

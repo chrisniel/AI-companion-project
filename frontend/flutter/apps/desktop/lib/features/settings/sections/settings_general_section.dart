@@ -69,8 +69,9 @@ class _SettingsGeneralSectionState extends State<SettingsGeneralSection> {
     setState(() {
       _isLoadingAutostart = true;
     });
+    CompanionClient? client;
     try {
-      final client = await _resolveClient();
+      client = await _resolveClient();
       final status = await client.getAutostartStatus();
       if (!mounted) return;
       setState(() {
@@ -83,6 +84,10 @@ class _SettingsGeneralSectionState extends State<SettingsGeneralSection> {
         _isLoadingAutostart = false;
         _autostartMessage = 'Unable to check Windows startup status: ${_formatError(e)}';
       });
+    } finally {
+      if (widget.client == null) {
+        client?.close();
+      }
     }
   }
 
@@ -95,8 +100,9 @@ class _SettingsGeneralSectionState extends State<SettingsGeneralSection> {
       _isUpdatingAutostart = true;
       _autostartMessage = 'Updating Windows startup setting...';
     });
+    CompanionClient? client;
     try {
-      final client = await _resolveClient();
+      client = await _resolveClient();
       final updated = await client.updateAutostart(
         AutostartUpdateRequest(
           enabled: enabled,
@@ -117,6 +123,10 @@ class _SettingsGeneralSectionState extends State<SettingsGeneralSection> {
         _isUpdatingAutostart = false;
         _autostartMessage = 'Failed to update startup setting: ${_formatError(e)}';
       });
+    } finally {
+      if (widget.client == null) {
+        client?.close();
+      }
     }
   }
 

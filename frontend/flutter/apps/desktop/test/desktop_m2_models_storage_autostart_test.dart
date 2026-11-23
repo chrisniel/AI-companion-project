@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:ai_companion_desktop/controllers/desktop_settings_controller.dart';
 import 'package:ai_companion_desktop/coordinator/desktop_runtime_coordinator.dart';
 import 'package:ai_companion_desktop/diagnostics/windows_storage_diagnostic_reader.dart';
+import 'package:ai_companion_desktop/features/chat/desktop_chat_controller.dart';
 import 'package:ai_companion_desktop/features/settings/settings_section.dart';
 import 'package:ai_companion_desktop/platform/desktop_client_settings.dart';
 import 'package:ai_companion_desktop/platform/windows_shell_adapter.dart';
@@ -871,6 +872,129 @@ void main() {
     );
     fakeRuntime.dispose();
   });
+
+  testWidgets(
+      'Phase 4 Attach mmproj rescan clears stale null selection and Advanced Diagnostics stays collapsed when connected',
+      (tester) async {
+    tester.view.physicalSize = const Size(1280, 960);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    final controller = DesktopSettingsController(
+      initialDestination: DesktopNavDestination.settings,
+      initialSettingsSection: SettingsSectionId.runtime,
+      diagnosticReader: WindowsStorageDiagnosticReader(
+        localAppDataOverride: r'C:\Mock\Local',
+        fileExistsChecker: (_) => false,
+      ),
+    );
+
+    final tempInbox = Directory.systemTemp.createTempSync('p4_attach_mmproj_');
+    addTearDown(() => tempInbox.deleteSync(recursive: true));
+    final tempMmproj = File('${tempInbox.path}${Platform.pathSeparator}mmproj-gemma3.gguf')
+      ..writeAsBytesSync(const [1, 2, 3, 4]);
+
+    final statefulClient = _StatefulAttachMmprojClient();
+    final chatController = DesktopChatController(client: statefulClient);
+    final fakeShell = _FakeDesktopShellAdapter(
+      filesResult: [tempMmproj.path],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: CompanionTheme.dark(),
+        home: Scaffold(
+          body: SettingsScreen(
+            controller: controller,
+            client: statefulClient,
+            chatController: chatController,
+            clientSettings: _InMemoryDesktopClientSettings(),
+            credentialStore: InMemoryCredentialStore('test-token'),
+            shellAdapter: fakeShell,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // _loadModelData() connects via statefulClient and keeps Advanced Diagnostics collapsed when connected
+    expect(find.byKey(const Key('runtime_advanced_toggle')), findsOneWidget);
+    expect(find.text('Runtime Process Supervision'), findsNothing);
+
+    // Scan #1: VL model missing mmproj
+    final scanBtn = find.byKey(const Key('d6_scan_inbox_button'));
+    await tester.ensureVisible(scanBtn);
+    await tester.tap(scanBtn);
+    await tester.pumpAndSettle();
+    expect(find.text('Vision model — mmproj missing'), findsOneWidget);
+    final attachBtn = find.byKey(const Key('attach_mmproj_gemma3-vl-missing'));
+    expect(attachBtn, findsOneWidget);
+
+    // Attach mmproj -> stages file -> Scan #2 returns matched mmproj; stale null must NOT overwrite it
+    await tester.ensureVisible(attachBtn);
+    await tester.tap(attachBtn);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Vision Paired: mmproj-gemma3.gguf'), findsOneWidget);
+    expect(find.byKey(const Key('attach_mmproj_gemma3-vl-missing')), findsNothing);
+
+    final installBtn = find.byKey(const Key('d6_install_candidate_gemma3-vl-missing'));
+    await tester.ensureVisible(installBtn);
+    await tester.tap(installBtn);
+    await tester.pumpAndSettle();
+
+    expect(statefulClient.installedModelId, equals('gemma3-vl-missing'));
+    expect(
+      statefulClient.lastInstalledCompanionRelativePath,
+      equals('gemma3/mmproj-gemma3.gguf'),
+    );
+    chatController.dispose();
+  });
+}
+
+class _StatefulAttachMmprojClient extends FakeM2DesktopClient {
+  bool _attached = false;
+
+  @override
+  Future<ModelImportScanOut> scanModelImportInbox({
+    Duration timeout = const Duration(seconds: 30),
+  }) async {
+    scanCalls++;
+    if (scanCalls >= 2) {
+      _attached = true;
+    }
+    return ModelImportScanOut(
+      inboxDir: r'D:\CompanionLib\imports\inbox',
+      candidates: [
+        ModelImportCandidateOut(
+          relativePath: 'gemma3/gemma3.gguf',
+          primaryFilename: 'gemma3.gguf',
+          suggestedModelId: 'gemma3-vl-missing',
+          displayName: 'Gemma 3 4B',
+          fileSizeBytes: 2500000000,
+          sizeGb: 2.33,
+          artifactValid: true,
+          architecture: 'gemma3',
+          quantization: 'Q4_K_M',
+          hasChatTemplate: true,
+          hasVisionProjector: _attached,
+          expectsVisionProjector: true,
+          reasoningMode: 'unsupported',
+          companionMmprojRelativePath: _attached ? 'gemma3/mmproj-gemma3.gguf' : null,
+          companionMmprojFilename: _attached ? 'mmproj-gemma3.gguf' : null,
+          compatibleMmprojPaths: _attached ? const ['gemma3/mmproj-gemma3.gguf'] : const [],
+          detectedCapabilities: _attached ? const ['chat', 'vision'] : const ['chat'],
+          preflight: const PreflightAssessmentOut(
+            status: 'recommended',
+            estimatedVramGb: 3.5,
+            hostDedicatedVramGb: 8.0,
+            recommendedProfile: 'balanced',
+            message: 'Fits comfortably on 8.0 GB GPU.',
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _OfflineStatusFakeClient extends FakeM2DesktopClient {

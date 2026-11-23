@@ -40,7 +40,7 @@
 ### Category: `V1 OPEN IMPLEMENTATION DETAIL`
 - **`DEBT-V1-05`: D6 Import UI Interaction & Progress Reporting [PARTIALLY RESOLVED IN M2 BATCH E]**
   - *Context:* D6 requires manual user scan of inbox and preflight review.
-  - *Resolution:* M2 Batch E (`feature/m2-models-storage-autostart-e`) delivered the Host-Admin REST endpoints (`POST /api/v1/models/import/scan`, `POST /api/v1/models/import/install`, `DELETE /api/v1/models/registry/{model_id}`), `companion_api` SDK methods, and Desktop `SettingsRuntimeSection` D6 Inbox UI (Copy Path, Open in Explorer, Scan Inbox, `.gguf` + `mmproj` candidate bundle preview, advisory VRAM preflight badges, Install Bundle confirmation, and Uninstall action).
+  - *Resolution:* M2 Batch E (`feature/m2-models-storage-autostart-e`) delivered the Host-Admin REST endpoints (`POST /api/v1/models/import/scan`, `POST /api/v1/models/import/install`, `DELETE /api/v1/models/registry/{model_id}`), `companion_api` SDK methods, and Desktop `SettingsRuntimeSection` consumer **Add Local Models** UI (native Win32 **Add Model Files...** Copy/Move staging, **Open Inbox Folder**, **Scan Inbox**, `.gguf` + header-verified multi-`mmproj` override dropdown / **`Attach mmproj...`**, `Reasoning` badges, advisory VRAM/CTX preflight strips, **Install Bundle**, and Uninstall action).
   - *Remaining Open Detail:* Optional SSE progress event stream during large multi-gigabyte file copies (`install_inbox_candidate()`).
 
 - **`DEBT-V1-06`: Selective Automatic Memory Extraction Cadence & Prompts**

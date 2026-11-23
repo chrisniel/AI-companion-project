@@ -1,5 +1,6 @@
 """Health checks and host machine telemetry endpoints."""
 
+import asyncio
 import inspect
 import json
 import os
@@ -287,12 +288,13 @@ async def relocate_system_library_root(
                     detail="Failed to stop idle LLM router before relocating LIBRARY_ROOT.",
                 )
         else:
-            fallback_unload = getattr(provider, "unload", None)
+            fallback_unload = getattr(provider, "unload_model", None) or getattr(provider, "unload", None)
             if inspect.iscoroutinefunction(fallback_unload):
                 await fallback_unload()
 
     try:
-        relocate_library_root(
+        await asyncio.to_thread(
+            relocate_library_root,
             new_library_root=Path(request.new_library_root.strip()),
             migrate_existing_assets=request.migrate_existing_assets,
         )

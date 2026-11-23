@@ -1,5 +1,6 @@
 """Decision D6 controlled local model import, verification, atomic install & uninstall service."""
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -24,6 +25,7 @@ from app.schemas.model_registry import (
     ReasoningMode,
 )
 from app.services.host_config import clear_model_selection, get_saved_model_selection
+from app.services.llm.runtime_state import LLMRuntimeState
 from app.services.model_registry import (
     GGUFMetadata,
     assess_context_options,
@@ -148,7 +150,7 @@ def _projector_matches_arch(projector_type: str, architecture: str) -> bool:
 def _extract_family_signature(text: str) -> Optional[str]:
     low = (text or "").lower()
     m = re.search(
-        r"\b(gemma[-_ ]?[0-9]+|qwen[-_ ]?[0-9]+(?:vl)?|llama[-_ ]?[0-9]+|mistral|pixtral|internvl|minicpm)\b",
+        r"(?<![a-z0-9])(gemma[-_ ]?[0-9]+|qwen[-_ ]?[0-9]+(?:vl)?|llama[-_ ]?[0-9]+|mistral|pixtral|internvl|minicpm)(?![a-z0-9])",
         low,
     )
     if m:
@@ -460,6 +462,10 @@ def install_inbox_candidate(request: ModelImportInstallRequest) -> ModelImportIn
     primary_src = _contain_relative_path(inbox, request.relative_path)
     if not primary_src.is_file():
         raise ModelImportNotFoundError(f"Inbox model file not found: '{request.relative_path}'.")
+    if primary_src.suffix.lower() != ".gguf":
+        raise ModelImportValidationError(
+            f"Only GGUF model artifacts (.gguf) are supported; got '{primary_src.name}'."
+        )
 
     ok, err, meta = _verify_gguf_header_strict(primary_src)
     if not ok:
@@ -473,6 +479,10 @@ def install_inbox_candidate(request: ModelImportInstallRequest) -> ModelImportIn
         companion_src = _contain_relative_path(inbox, request.companion_relative_path)
         if not companion_src.is_file():
             raise ModelImportNotFoundError(f"Companion mmproj file not found: '{request.companion_relative_path}'.")
+        if companion_src.suffix.lower() != ".gguf":
+            raise ModelImportValidationError(
+                f"Companion projector must be a .gguf file; got '{companion_src.name}'."
+            )
         c_ok, c_err, companion_meta = _verify_gguf_header_strict(companion_src)
         if not c_ok:
             raise ModelImportValidationError(f"Invalid companion mmproj GGUF: {c_err}")
@@ -535,7 +545,87 @@ def install_inbox_candidate(request: ModelImportInstallRequest) -> ModelImportIn
             shutil.rmtree(stage_dir, ignore_errors=True)
         raise
 
-    # Consume inbox source files only when transfer_mode == 'move' (default)
+    # Compose Schema v3 entry preserving truthful intrinsic header facts and commit registry
+    # BEFORE consuming inbox source files (so registry write failures never lose user files).
+    try:
+        size_bytes = (target_dir / primary_src.name).stat().st_size
+        comp_bytes = (target_dir / companion_src.name).stat().st_size if companion_src is not None else 0
+        preflight = assess_hardware_suitability(
+            size_bytes,
+            architecture=meta.architecture,
+            companion_size_bytes=comp_bytes,
+        )
+        rec_profiles, _ = compute_recommended_profiles_for_model(
+            file_size_bytes=size_bytes,
+            companion_size_bytes=comp_bytes,
+        )
+        caps = ["chat"]
+        modalities = ["text"]
+        provenance = [{"capability": "chat", "supported": True, "provenance": CapabilityProvenance.detected.value}]
+        if companion_entries or meta.has_vision_encoder:
+            caps.append("vision")
+            modalities.append("image")
+            provenance.append({"capability": "vision", "supported": True, "provenance": CapabilityProvenance.detected.value})
+
+        detected_reasoning = (
+            meta.reasoning_mode
+            if meta.reasoning_mode
+            in (
+                ReasoningMode.always_on.value,
+                ReasoningMode.toggleable.value,
+                ReasoningMode.unsupported.value,
+            )
+            else ReasoningMode.unknown.value
+        )
+        if detected_reasoning in (ReasoningMode.always_on.value, ReasoningMode.toggleable.value):
+            caps.append("reasoning")
+            provenance.append({"capability": "reasoning", "supported": True, "provenance": CapabilityProvenance.detected.value})
+
+        variant_val = (
+            request.variant.value
+            if isinstance(request.variant, ModelVariant)
+            else _infer_variant(primary_src.name, meta.model_name)
+        )
+        display_name = (request.display_name or "").strip() or meta.model_name or model_id
+        primary_rel = f"{model_id}/{primary_src.name}"
+
+        raw_entry: Dict[str, Any] = {
+            "id": model_id,
+            "display_name": display_name,
+            "asset_type": "gguf",
+            "family": (request.family or "").strip() or (meta.architecture.capitalize() if meta.architecture else ""),
+            "architecture": meta.architecture,
+            "variant": variant_val,
+            "parameters": meta.size_label,
+            "quantization": meta.quantization,
+            "reasoning_mode": detected_reasoning,
+            "capabilities": caps,
+            "input_modalities": modalities,
+            "capability_provenance": provenance,
+            "model_max_context": meta.context_length,
+            "runtime_compatibility": ["llama.cpp"],
+            "primary_file": primary_rel,
+            "companion_files": companion_entries,
+            "license": (request.license or "").strip() or meta.license_name,
+            "source": "local_d6_import",
+            "sha256_primary": primary_sha,
+            "runtime_model_id": model_id,
+            "recommended_profiles": rec_profiles or [preflight.recommended_profile],
+            "estimated_vram_gb": preflight.estimated_vram_gb,
+            "estimated_ram_gb": round((size_bytes / (1024 ** 3)) * 0.25 + 0.3, 2),
+        }
+
+        reg_path = settings.INSTALLED_REGISTRY_PATH
+        reg_payload = _read_installed_registry_raw(reg_path)
+        reg_payload["models"] = [m for m in reg_payload.get("models", []) if isinstance(m, dict) and m.get("id") != model_id]
+        reg_payload["models"].append(raw_entry)
+        _write_installed_registry_atomic(reg_path, reg_payload)
+    except Exception:
+        if target_dir.exists():
+            shutil.rmtree(target_dir, ignore_errors=True)
+        raise
+
+    # Consume inbox source files only after Schema v3 registry commit succeeds
     if request.transfer_mode == "move":
         try:
             src_parent = primary_src.parent
@@ -546,80 +636,6 @@ def install_inbox_candidate(request: ModelImportInstallRequest) -> ModelImportIn
                 src_parent.rmdir()
         except OSError as exc:
             logger.warning(f"Post-install inbox cleanup warning: {exc}")
-
-    # Compose Schema v3 entry preserving truthful intrinsic header facts
-    size_bytes = (target_dir / primary_src.name).stat().st_size
-    comp_bytes = (target_dir / companion_src.name).stat().st_size if companion_src is not None else 0
-    preflight = assess_hardware_suitability(
-        size_bytes,
-        architecture=meta.architecture,
-        companion_size_bytes=comp_bytes,
-    )
-    rec_profiles, _ = compute_recommended_profiles_for_model(
-        file_size_bytes=size_bytes,
-        companion_size_bytes=comp_bytes,
-    )
-    caps = ["chat"]
-    modalities = ["text"]
-    provenance = [{"capability": "chat", "supported": True, "provenance": CapabilityProvenance.detected.value}]
-    if companion_entries or meta.has_vision_encoder:
-        caps.append("vision")
-        modalities.append("image")
-        provenance.append({"capability": "vision", "supported": True, "provenance": CapabilityProvenance.detected.value})
-
-    detected_reasoning = (
-        meta.reasoning_mode
-        if meta.reasoning_mode
-        in (
-            ReasoningMode.always_on.value,
-            ReasoningMode.toggleable.value,
-            ReasoningMode.unsupported.value,
-        )
-        else ReasoningMode.unknown.value
-    )
-    if detected_reasoning in (ReasoningMode.always_on.value, ReasoningMode.toggleable.value):
-        caps.append("reasoning")
-        provenance.append({"capability": "reasoning", "supported": True, "provenance": CapabilityProvenance.detected.value})
-
-    variant_val = (
-        request.variant.value
-        if isinstance(request.variant, ModelVariant)
-        else _infer_variant(primary_src.name, meta.model_name)
-    )
-    display_name = (request.display_name or "").strip() or meta.model_name or model_id
-    primary_rel = f"{model_id}/{primary_src.name}"
-
-    raw_entry: Dict[str, Any] = {
-        "id": model_id,
-        "display_name": display_name,
-        "asset_type": "gguf",
-        "family": (request.family or "").strip() or (meta.architecture.capitalize() if meta.architecture else ""),
-        "architecture": meta.architecture,
-        "variant": variant_val,
-        "parameters": meta.size_label,
-        "quantization": meta.quantization,
-        "reasoning_mode": detected_reasoning,
-        "capabilities": caps,
-        "input_modalities": modalities,
-        "capability_provenance": provenance,
-        "model_max_context": meta.context_length,
-        "runtime_compatibility": ["llama.cpp"],
-        "primary_file": primary_rel,
-        "companion_files": companion_entries,
-        "license": (request.license or "").strip() or meta.license_name,
-        "source": "local_d6_import",
-        "sha256_primary": primary_sha,
-        "runtime_model_id": model_id,
-        "recommended_profiles": rec_profiles or [preflight.recommended_profile],
-        "estimated_vram_gb": preflight.estimated_vram_gb,
-        "estimated_ram_gb": round((size_bytes / (1024 ** 3)) * 0.25 + 0.3, 2),
-    }
-
-    reg_path = settings.INSTALLED_REGISTRY_PATH
-    reg_payload = _read_installed_registry_raw(reg_path)
-    reg_payload["models"] = [m for m in reg_payload.get("models", []) if isinstance(m, dict) and m.get("id") != model_id]
-    reg_payload["models"].append(raw_entry)
-    _write_installed_registry_atomic(reg_path, reg_payload)
 
     from app.services.llm.manager import llm_manager
     llm_manager.refresh_auto_provider_if_idle()
@@ -648,6 +664,15 @@ async def delete_installed_model(model_id: str) -> ModelDeleteOut:
     if provider is not None:
         if getattr(provider, "has_active_generation", False):
             raise ModelImportConflictError("Cannot uninstall a model while generation is active.")
+        runtime_state = getattr(provider, "_runtime_state", None)
+        if runtime_state in (
+            LLMRuntimeState.MODEL_LOADING,
+            LLMRuntimeState.SERVER_STARTING,
+            LLMRuntimeState.MODEL_UNLOADING,
+        ):
+            raise ModelImportConflictError(
+                "Wait for the runtime to finish loading or unloading before uninstalling a model."
+            )
         if provider.is_loaded():
             status_obj = await provider.get_status()
             active_identifiers = {
@@ -664,18 +689,27 @@ async def delete_installed_model(model_id: str) -> ModelDeleteOut:
 
     lib_base = settings.MODEL_LIBRARY_DIR.resolve()
     primary_rel = Path(target.manifest.primary_file)
-    if not primary_rel.is_absolute():
-        resolved_primary = (lib_base / primary_rel).resolve()
-        if resolved_primary.is_relative_to(lib_base):
-            bundle_dir = resolved_primary.parent
-            if bundle_dir != lib_base and bundle_dir.is_relative_to(lib_base) and bundle_dir.exists():
-                shutil.rmtree(bundle_dir, ignore_errors=False)
-            elif resolved_primary.is_file():
-                resolved_primary.unlink(missing_ok=True)
-                for comp in target.manifest.companion_files:
-                    comp_p = (lib_base / comp.path).resolve()
-                    if comp_p.is_relative_to(lib_base) and comp_p.is_file():
-                        comp_p.unlink(missing_ok=True)
+
+    def _remove_model_files() -> None:
+        if not primary_rel.is_absolute():
+            resolved_primary = (lib_base / primary_rel).resolve()
+            if resolved_primary.is_relative_to(lib_base):
+                bundle_dir = resolved_primary.parent
+                if bundle_dir != lib_base and bundle_dir.is_relative_to(lib_base) and bundle_dir.exists():
+                    shutil.rmtree(bundle_dir, ignore_errors=False)
+                elif resolved_primary.is_file():
+                    resolved_primary.unlink(missing_ok=True)
+                    for comp in target.manifest.companion_files:
+                        comp_p = (lib_base / comp.path).resolve()
+                        if comp_p.is_relative_to(lib_base) and comp_p.is_file():
+                            comp_p.unlink(missing_ok=True)
+
+    try:
+        await asyncio.to_thread(_remove_model_files)
+    except OSError as exc:
+        raise ModelImportConflictError(
+            f"Could not remove model files because they are currently in use: {exc}"
+        ) from None
 
     reg_path = settings.INSTALLED_REGISTRY_PATH
     if reg_path.exists():

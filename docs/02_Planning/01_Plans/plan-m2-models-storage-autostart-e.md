@@ -2,7 +2,7 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- **Status:** Phase 2 & Phase 3 Complete (Through Slice 7) — Awaiting Phase 4 Independent Review & Manual Windows Host QA
+- **Status:** Phase 2, Phase 3 & Phase 4 Independent Review Remediation Complete — Awaiting Final Review & Manual Windows Host QA
 - **Delivery Level:** Level C — Sensitive Design
 - **Scope Mode:** New Feature — M2 Batch E Host Storage Roots & Relocatable Library (`PC-HOST-004`), Decision D6 Controlled Local Model Import, GGUF Header Fix & Schema v3 Registry Writer (`PC-MODEL-001`..`006`), `LlamaCppProvider` Multi-Root Support, Desktop Model Management & Hardware Profile UI (`PC-CLIENT-010`), and Windows Task Scheduler Login Autostart (`PC-HOST-002`). *(Profile PIN lock and Satellite Device Enrollment `PC-IDENTITY-003` remain explicitly deferred per Human Owner direction.)*
 - **Target Files:**
@@ -228,19 +228,25 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
      - Surface `runtime.diagnosticMessage` (`Diagnostic Detail`) in **Runtime Process Supervision**, add **Start / Retry Local Runtime** buttons (`runtime_top_retry_button` and `runtime_supervision_retry_button`), wire **Refresh All** to recover offline local runtime first, auto-reload models when runtime becomes operational, and increase **Apply & Save** `ensureRuntimeReady()` timeout from `10s` to `30s`.
 
 8. **Phase 3 Documentation, Packaging & Draft PR:**
-   - Reconcile canonical specs (`storage-and-assets.md`, `runtime-and-models.md`, `windows-host-and-notifications.md`), `WBS.md`, `MASTER_CHECKLIST.md`, `DELIVERY_INDEX.md`, `SPRINT_ROADMAP.md`, `DECISION_DEBT.md`, `task.md`, `CHANGELOG.md`, walkthrough (`walkthrough-m2-models-storage-autostart-e.md`), archived branch tracker, push updated commits to `origin/feature/m2-models-storage-autostart-e` (PR #47), and stop for Phase 4 Independent Review.
+   - Reconcile canonical specs (`storage-and-assets.md`, `runtime-and-models.md`, `windows-host-and-notifications.md`), `WBS.md`, `MASTER_CHECKLIST.md`, `DELIVERY_INDEX.md`, `SPRINT_ROADMAP.md`, `DECISION_DEBT.md`, `task.md`, `CHANGELOG.md`, walkthrough (`walkthrough-m2-models-storage-autostart-e.md`), archived branch tracker, and publish Draft PR #47 against `develop`.
+
+9. **Phase 4 Independent Review Remediation (Post-Review Hardening):**
+   - **Blocking Fixes:** Exact token check (`args_text.split()`) in `WindowsAutostartService.get_status()` so `--autostart-windowed` never falsely reads as minimized; remove stale `putIfAbsent(null)` override lock-in & prune/dispose candidate state on inbox rescan and `Attach mmproj...` in `SettingsRuntimeSection`; move D6 `"move"` inbox unlink strictly after atomic registry commit (with `target_dir` rollback on post-`os.replace` registry failure) and offload synchronous `scan_import_inbox`, `install_inbox_candidate`, and `relocate_library_root` via `asyncio.to_thread(...)`.
+   - **Major Fixes:** Collapse Advanced Diagnostics accordion reliably in production once connected (`_modelStatus == null || _modelStatus!.provider == 'unknown'`) while preserving standalone `FLUTTER_TEST` offline guards; clamp small-model `resolve_context_size_for_mode()` / `assess_context_options()` identically without forcing `4096` and include live context/hardware telemetry on transitional `LlamaCppProvider.get_status()` snapshots; separate `NON_DB_GET_PATHS` so `PUT /system/storage` and `PUT /system/autostart` stay blocked during shutdown; enforce `.gguf` suffix, symlink-free relocation copy targets, extended reserved-directory overlap checks (`CACHE_ROOT`, `LOG_ROOT`, `BACKUP_DIR`, `ATTACHMENT_DIR`, `CHARACTER_DIR`, `MEMORY_DIR`, `config`), transitional delete `409` guard + offloaded `rmtree`, and `unload_model` preference in `health.py`; wrap GPU/VRAM badge overflow, add `mounted` guards, close uninjected ephemeral `CompanionClient`s, URL-encode `deleteInstalledModel` `modelId`, and guard `restoreAndFocusWindow()` re-entry.
+   - **Minor & Doc Sync Fixes:** Handle `subprocess.SubprocessError` timeouts in `autostart.py`, allow `PUT` in CORS methods, switch GPU registry lookup to `CurrentControlSet` with `bytes`-safe VRAM parsing, tighten `_extract_family_signature()` boundaries, add targeted Phase 4 regression tests, and reconcile `WBS.md` (`98`->`100` schemas), `DECISION_DEBT.md`, `task.md`, and `runtime-and-models.md`.
 
 ---
 
 ## 5. Acceptance Criteria & Verification Strategy
 
 ### Automated Repository Checks
-- [x] Slice 7 targeted backend & import isolation check: `backend\.venv\Scripts\python.exe -m pytest backend\tests\test_d6_model_import_and_autostart.py backend\tests\test_import_isolation.py -v -p no:cacheprovider -o log_file=NUL` (`16 passed in 7.49s`) *(full backend suite `928 passed, 100 warnings, 4 subtests passed` in `319.76s` verified at Slice 6 `4c71c1e`)*
-- [x] OpenAPI contract drift check: `backend\.venv\Scripts\python.exe scripts\check_openapi_contract.py --check` (`86 routes`)
-- [x] OpenAPI & Dart contract parity: `backend\.venv\Scripts\python.exe scripts\check_dart_openapi_parity.py --check` (`100/100` schemas, `111/111` native routes) *(parity unittest `8/8 OK` in `0.250s` verified at `4c71c1e`, scripts unchanged in Slice 7)*
-- [x] Dart static analysis: `cd frontend\flutter && dart analyze .` (`No issues found!`) *(`companion_core` `24/24` and `companion_api` `115/115` verified at `4c71c1e`, SDK packages unchanged in Slice 7)*
-- [x] Flutter Desktop test suite & Windows MSVC build: `cd frontend\flutter\apps\desktop && flutter test --no-pub --concurrency=1 test` (`441/441` passed in `03:30`) and `flutter build windows --debug --no-pub` (`ai_companion_desktop.exe`, `20.1s`)
-- [x] Diff hygiene: `git diff --check develop` (clean exit 0 prior to staging)
+- [x] Full backend pytest suite (including `test_import_isolation.py` & `test_python_dependency_lock.py`): `backend\.venv\Scripts\python.exe -m pytest backend\tests backend\tests\test_import_isolation.py scripts\tests\test_python_dependency_lock.py -q -p no:cacheprovider -o log_file=NUL` (**`932 passed, 100 warnings, 4 subtests passed in 452.07s`**, exit `0`)
+- [x] OpenAPI contract drift check: `backend\.venv\Scripts\python.exe scripts\check_openapi_contract.py --check` (**`86 routes`** up-to-date, exit `0`)
+- [x] OpenAPI & Dart contract parity: `backend\.venv\Scripts\python.exe scripts\check_dart_openapi_parity.py --check` (**`100/100` DTO schemas, `111/111` native routes**, exit `0`) and `backend\.venv\Scripts\python.exe -m unittest scripts\tests\test_check_dart_openapi_parity.py -v` (**`Ran 8 tests in 0.339s — OK`**, exit `0`)
+- [x] Dart static analysis & SDK unit tests: `cd frontend\flutter && dart analyze .` (**`No issues found!`**), `companion_core` `dart test` (**`+24: All tests passed!`**), and `companion_api` `dart test` (**`+115: All tests passed!`**)
+- [x] Flutter Desktop test suite & Windows MSVC Debug build: `cd frontend\flutter\apps\desktop && flutter test --no-pub --concurrency=1 test` (**`+442: All tests passed!`** in `02:48`, exit `0`) and `flutter build windows --debug --no-pub` (**`Built build\windows\x64\runner\Debug\ai_companion_desktop.exe` in `20.3s`**, exit `0`)
+- [x] Diff hygiene: `git diff --check develop` (clean exit `0` prior to final remediation commit)
+- **Hosted CI Note:** Hosted GitHub Actions CI passed on Slice 7 (`377d3a6`) prior to Phase 4 remediation and re-runs automatically after pushing the Phase 4 remediation commit (do not equate pre-push CI with post-push CI).
 
 ### Manual & Host-Level Checks (Windows Desktop)
 - [ ] Inspect `Settings -> Storage`: use native **Choose Folder...** (`IFileOpenDialog`) to relocate the Library Folder to a secondary directory, confirm `bootstrap.json` + **Refresh All** + Runtime's `Add Local Models` inbox path update in sync (without stale scan results), and expand **Advanced Storage Diagnostics** to verify all 5 roots + **Copy Path** / **Open Folder**.

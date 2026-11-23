@@ -188,10 +188,14 @@ class WindowsAutostartService:
                     registered_cmd = f"{cmd_text} {args_text}".strip() if cmd_text else None
                     registered_wd = wd_el.text.strip() if wd_el is not None and wd_el.text else None
                     if args_text:
-                        minimized = "--minimized-to-tray" in args_text or "--autostart" in args_text
+                        args_tokens = set(args_text.split())
+                        minimized = (
+                            "--minimized-to-tray" in args_tokens
+                            or "--autostart" in args_tokens
+                        )
                 except ET.ParseError:
                     pass
-        except OSError as exc:
+        except (OSError, subprocess.SubprocessError) as exc:
             return AutostartStatusOut(
                 supported=True,
                 enabled=False,
@@ -238,12 +242,19 @@ class WindowsAutostartService:
             )
 
         if not enabled:
-            proc = self._run_schtasks(["/Delete", "/TN", TASK_NAME, "/F"])
-            if proc.returncode != 0:
-                verify = self._run_schtasks(["/Query", "/TN", TASK_NAME])
-                if verify.returncode == 0:
-                    err = (proc.stderr or proc.stdout or "").strip()
-                    raise AutostartConfigurationError(f"Failed to remove Task Scheduler entry: {err}")
+            try:
+                proc = self._run_schtasks(["/Delete", "/TN", TASK_NAME, "/F"])
+                if proc.returncode != 0:
+                    verify = self._run_schtasks(["/Query", "/TN", TASK_NAME])
+                    if verify.returncode == 0:
+                        err = (proc.stderr or proc.stdout or "").strip()
+                        raise AutostartConfigurationError(
+                            f"Failed to remove Task Scheduler entry: {err}"
+                        )
+            except (OSError, subprocess.SubprocessError) as exc:
+                raise AutostartConfigurationError(
+                    f"Failed to remove Task Scheduler entry: {exc}"
+                ) from exc
             save_autostart_preferences(False, minimized_to_tray)
             return AutostartStatusOut(
                 supported=True,
@@ -276,7 +287,14 @@ class WindowsAutostartService:
             os.close(fd)
             tmp_xml = Path(raw_path)
             tmp_xml.write_text(xml_content, encoding="utf-16")
-            proc = self._run_schtasks(["/Create", "/TN", TASK_NAME, "/XML", str(tmp_xml), "/F"])
+            try:
+                proc = self._run_schtasks(
+                    ["/Create", "/TN", TASK_NAME, "/XML", str(tmp_xml), "/F"]
+                )
+            except (OSError, subprocess.SubprocessError) as exc:
+                raise AutostartConfigurationError(
+                    f"Failed to register Task Scheduler entry: {exc}"
+                ) from exc
             if proc.returncode != 0:
                 err = (proc.stderr or proc.stdout or "").strip()
                 raise AutostartConfigurationError(f"Failed to register Task Scheduler entry: {err}")

@@ -105,6 +105,10 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
     if (storageChanged) {
       _lastStorageRevision = storageRev;
       _selectedCandidateMmproj.clear();
+      for (final ctrl in _candidateNameControllers.values) {
+        ctrl.dispose();
+      }
+      _candidateNameControllers.clear();
       if (mounted) {
         setState(() {
           _inboxScanResult = null;
@@ -362,7 +366,8 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
 
   Future<void> _loadModelData() async {
     if (_isLoadingModelCatalog) return;
-    if (widget.client == null && Platform.environment.containsKey('FLUTTER_TEST')) {
+    if (widget.client == null &&
+        Platform.environment.containsKey('FLUTTER_TEST')) {
       final savedModel = await _clientSettings.readSelectedModel();
       if (mounted) {
         setState(() {
@@ -839,15 +844,28 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
       final scanOut = await client.scanModelImportInbox();
       if (!mounted) return;
       final activePaths = scanOut.candidates.map((c) => c.relativePath).toSet();
-      _selectedCandidateMmproj.removeWhere((k, _) => !activePaths.contains(k));
+      final byPath = {for (final c in scanOut.candidates) c.relativePath: c};
+      final staleControllerKeys = _candidateNameControllers.keys
+          .where((k) => !activePaths.contains(k))
+          .toList();
+      for (final k in staleControllerKeys) {
+        _candidateNameControllers.remove(k)?.dispose();
+      }
+      _selectedCandidateMmproj.removeWhere((k, selectedVal) {
+        final cand = byPath[k];
+        if (cand == null) return true;
+        if (selectedVal == null) return false;
+        final validOptions = <String>{
+          if (cand.companionMmprojRelativePath != null)
+            cand.companionMmprojRelativePath!,
+          ...cand.compatibleMmprojPaths,
+        };
+        return !validOptions.contains(selectedVal);
+      });
       for (final c in scanOut.candidates) {
         _candidateNameControllers.putIfAbsent(
           c.relativePath,
           () => TextEditingController(text: c.displayName),
-        );
-        _selectedCandidateMmproj.putIfAbsent(
-          c.relativePath,
-          () => c.companionMmprojRelativePath,
         );
       }
       setState(() {
@@ -1032,30 +1050,38 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
               Icon(Icons.memory_rounded, size: 20, color: ext?.accent),
               const SizedBox(width: CompanionSpacing.sm),
               Expanded(
-                child: Text(
-                  'Local LLM Model Selection',
-                  style: CompanionTypography.titleMedium
-                      .copyWith(color: ext?.textPrimary),
-                  overflow: TextOverflow.ellipsis,
+                child: Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: CompanionSpacing.sm,
+                  runSpacing: CompanionSpacing.xs,
+                  children: [
+                    Text(
+                      'Local LLM Model Selection',
+                      style: CompanionTypography.titleMedium
+                          .copyWith(color: ext?.textPrimary),
+                    ),
+                    if (status?.hostVramGb != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: ext?.accent.withValues(alpha: 0.12),
+                          borderRadius: CompanionRadius.borderSm,
+                        ),
+                        child: Text(
+                          '${status!.hostGpuName ?? 'GPU'} · ${status.hostVramGb!.toStringAsFixed(0)} GB VRAM'
+                          '${status.hostRamGb != null ? ' · ${status.hostRamGb!.toStringAsFixed(0)} GB RAM' : ''}',
+                          style: CompanionTypography.caption.copyWith(
+                            color: ext?.accent,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-              if (status?.hostVramGb != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: ext?.accent.withValues(alpha: 0.12),
-                    borderRadius: CompanionRadius.borderSm,
-                  ),
-                  child: Text(
-                    '${status!.hostGpuName ?? 'GPU'} · ${status.hostVramGb!.toStringAsFixed(0)} GB VRAM'
-                    '${status.hostRamGb != null ? ' · ${status.hostRamGb!.toStringAsFixed(0)} GB RAM' : ''}',
-                    style: CompanionTypography.caption.copyWith(
-                      color: ext?.accent,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 11,
-                    ),
-                  ),
-                ),
             ],
           ),
           const SizedBox(height: CompanionSpacing.md),
@@ -1599,10 +1625,14 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
                                   onPressed: (_isScanningInbox ||
                                           _installingRelativePath != null)
                                       ? null
-                                      : () => _browseAndStageModelFiles(
+                                      : () {
+                                          _selectedCandidateMmproj
+                                              .remove(cand.relativePath);
+                                          _browseAndStageModelFiles(
                                             dialogTitle:
                                                 'Select Vision Projector (mmproj-*.gguf) for ${cand.displayName}',
-                                          ),
+                                          );
+                                        },
                                   icon: const Icon(
                                       Icons.add_photo_alternate_outlined,
                                       size: 15),
@@ -1893,9 +1923,8 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
     CompanionThemeExtension? ext,
     bool isDark,
   ) {
-    final isDisconnected = widget.client == null ||
-        _modelStatus == null ||
-        _modelStatus!.provider == 'unknown';
+    final isDisconnected =
+        _modelStatus == null || _modelStatus!.provider == 'unknown';
     final isExpanded =
         _advancedUserToggled ? _advancedExpanded : isDisconnected;
 
@@ -2231,15 +2260,17 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
                       });
                       final candidateUrl = _urlController.text.trim();
                       final candidateToken = _tokenController.text.trim();
+                      CompanionClient? probeClient;
                       try {
                         CompanionClient.validateBaseUrl(candidateUrl);
                         final probeStore =
                             InMemoryCredentialStore(candidateToken);
-                        final probeClient = CompanionClient(
+                        probeClient = CompanionClient(
                           baseUrl: candidateUrl,
                           credentialStore: probeStore,
                         );
                         final health = await probeClient.getHealth();
+                        if (!mounted) return;
                         if (health.status == 'healthy') {
                           if (candidateToken.isEmpty) {
                             setState(() {
@@ -2249,11 +2280,13 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
                           } else {
                             try {
                               final auth = await probeClient.verifyAuth();
+                              if (!mounted) return;
                               setState(() {
                                 _testConnectionResult =
                                     'Verified: Health OK (200), pairing token verified (${auth.tokenType}).';
                               });
                             } catch (authErr) {
+                              if (!mounted) return;
                               setState(() {
                                 _testConnectionResult =
                                     'Reachable: Health OK (200), but authentication verification failed: $authErr';
@@ -2267,10 +2300,12 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
                           });
                         }
                       } catch (e) {
+                        if (!mounted) return;
                         setState(() {
                           _testConnectionResult = 'Connection failed: $e';
                         });
                       } finally {
+                        probeClient?.close();
                         if (mounted) {
                           setState(() {
                             _isTesting = false;
@@ -2301,6 +2336,7 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
                     } catch (_) {}
                   }
                   if (widget.runtimeCoordinator != null) {
+                    if (!mounted) return;
                     setState(() {
                       _testConnectionResult =
                           'Settings persisted. Verifying connection to runtime...';

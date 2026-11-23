@@ -100,7 +100,7 @@ M2_ROUTE_DART_METHODS: Dict[Tuple[str, str], Tuple[str, str]] = {
     ("PATCH", "/api/v1/models/profile"): ("updateModelProfile", "/api/v1/models/profile"),
     ("POST", "/api/v1/models/import/scan"): ("scanModelImportInbox", "/api/v1/models/import/scan"),
     ("POST", "/api/v1/models/import/install"): ("installModelFromInbox", "/api/v1/models/import/install"),
-    ("DELETE", "/api/v1/models/registry/{model_id}"): ("deleteInstalledModel", "/api/v1/models/registry/$modelId"),
+    ("DELETE", "/api/v1/models/registry/{model_id}"): ("deleteInstalledModel", "/api/v1/models/registry/${Uri.encodeComponent(modelId)}"),
 }
 
 # Character foundation routes delivered in M3 Character Foundation (PC-CHAR-001, PC-CHAR-005).

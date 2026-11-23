@@ -51,6 +51,7 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
   bool _isTrayAvailable = false;
   bool _isDisposed = false;
   bool _pendingMaximizeOnFirstShow = false;
+  bool _isRestoringWindow = false;
 
   bool get isInitialized => _isInitialized;
   bool get isWindowVisible => _isWindowVisible;
@@ -310,17 +311,22 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
 
   /// Restores the window from hidden/minimized state and requests focus.
   Future<void> restoreAndFocusWindow() async {
-    if (_isDisposed) return;
-    final wasHidden = !_isWindowVisible;
-    await windowAdapter.show();
-    await windowAdapter.focus();
-    _isWindowVisible = true;
-    if (_pendingMaximizeOnFirstShow && !_isDisposed) {
-      _pendingMaximizeOnFirstShow = false;
-      await windowAdapter.maximize();
-    }
-    if (wasHidden && _isInitialized && !_isDisposed) {
-      onWindowRestored?.call();
+    if (_isDisposed || _isRestoringWindow) return;
+    _isRestoringWindow = true;
+    try {
+      final wasHidden = !_isWindowVisible;
+      await windowAdapter.show();
+      await windowAdapter.focus();
+      _isWindowVisible = true;
+      if (_pendingMaximizeOnFirstShow && !_isDisposed) {
+        _pendingMaximizeOnFirstShow = false;
+        await windowAdapter.maximize();
+      }
+      if (wasHidden && _isInitialized && !_isDisposed) {
+        onWindowRestored?.call();
+      }
+    } finally {
+      _isRestoringWindow = false;
     }
   }
 

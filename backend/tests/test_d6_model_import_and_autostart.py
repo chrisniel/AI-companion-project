@@ -676,3 +676,163 @@ async def test_reasoning_mode_detection_and_persistence(
     installed_entry = next(m for m in build_model_list() if m.manifest.id == "gemma4-toggle-installed")
     assert installed_entry.manifest.reasoning_mode.value == "toggleable"
     assert any(c.value == "reasoning" for c in installed_entry.manifest.capabilities)
+
+
+def test_autostart_windowed_token_readback_and_timeout_handling(monkeypatch, tmp_path):
+    """Blocking 1 regression: '--autostart-windowed' must read back minimized_to_tray=False; timeouts handled cleanly."""
+    import subprocess
+    import sys
+    from app.services.autostart import AutostartConfigurationError, WindowsAutostartService
+
+    monkeypatch.setenv("COMPANION_DATA_ROOT", str(tmp_path / "AutostartWindowedData"))
+    exe = tmp_path / "ai_companion_desktop.exe"
+    exe.write_bytes(b"MZ")
+
+    svc = WindowsAutostartService()
+    saved_xml: dict[str, str] = {}
+
+    def _fake_schtasks(cmd, **kwargs):
+        if "/Create" in cmd and "/XML" in cmd:
+            xml_path = Path(cmd[cmd.index("/XML") + 1])
+            saved_xml["content"] = xml_path.read_text(encoding="utf-16")
+            return MagicMock(returncode=0, stdout="", stderr="")
+        if "/Query" in cmd:
+            return MagicMock(returncode=0, stdout=saved_xml["content"], stderr="")
+        return MagicMock(returncode=0, stdout="", stderr="")
+
+    with patch("app.services.autostart.subprocess.run", side_effect=_fake_schtasks), \
+         patch.object(sys, "platform", "win32"):
+        enabled = svc.set_enabled(
+            True,
+            minimized_to_tray=False,
+            executable_path=str(exe),
+            working_directory=str(tmp_path),
+        )
+        assert enabled.minimized_to_tray is False
+        assert "--autostart-windowed" in saved_xml["content"]
+        queried = svc.get_status()
+        assert queried.task_registered is True
+        assert queried.minimized_to_tray is False
+
+    # subprocess.TimeoutExpired must fail gracefully (status detail on get, AutostartConfigurationError on set)
+    with patch("app.services.autostart.subprocess.run", side_effect=subprocess.TimeoutExpired("schtasks", 15)), \
+         patch.object(sys, "platform", "win32"):
+        q_timeout = svc.get_status()
+        assert q_timeout.task_registered is False
+        assert "timed out" in q_timeout.status_detail.lower()
+        with pytest.raises(AutostartConfigurationError):
+            svc.set_enabled(True, executable_path=str(exe), working_directory=str(tmp_path))
+
+
+@pytest.mark.asyncio
+async def test_d6_install_atomicity_extension_and_delete_transitional_guards(
+    client, host_admin_headers, monkeypatch, tmp_path
+):
+    """Verify .gguf suffix enforcement, post-registry inbox unlink atomicity, family regex & delete 409 guards."""
+    from app.services.model_import import _extract_family_signature
+
+    assert _extract_family_signature("mmproj_gemma4_f16.gguf") == "gemma4"
+
+    monkeypatch.setenv("COMPANION_DATA_ROOT", str(tmp_path / "AtomicityData"))
+    inbox = settings.IMPORT_INBOX_DIR
+    inbox.mkdir(parents=True, exist_ok=True)
+
+    valid_bytes = _build_gguf_bytes(arch="llama", name="SafeModel", context_length=4096)
+    (inbox / "fake.safetensors").write_bytes(valid_bytes)
+    bad_ext = await client.post(
+        "/api/v1/models/import/install",
+        json={"relative_path": "fake.safetensors", "model_id": "bad-ext-model"},
+        headers=host_admin_headers,
+    )
+    assert bad_ext.status_code == 400
+
+    src_gguf = inbox / "atomic-model.gguf"
+    src_gguf.write_bytes(valid_bytes)
+    with patch("app.services.model_import._write_installed_registry_atomic", side_effect=OSError("disk full")):
+        with pytest.raises(OSError):
+            await client.post(
+                "/api/v1/models/import/install",
+                json={
+                    "relative_path": "atomic-model.gguf",
+                    "model_id": "atomic-model",
+                    "transfer_mode": "move",
+                },
+                headers=host_admin_headers,
+            )
+    # Inbox source must still exist and orphaned target dir must have been rolled back
+    assert src_gguf.is_file()
+    assert not (settings.MODEL_LIBRARY_DIR / "atomic-model").exists()
+
+    # Complete clean install then test transitional MODEL_LOADING & locked-file OSError -> 409 on delete
+    with patch.object(llm_manager, "refresh_auto_provider_if_idle", return_value=False):
+        ok_inst = await client.post(
+            "/api/v1/models/import/install",
+            json={
+                "relative_path": "atomic-model.gguf",
+                "model_id": "atomic-model",
+                "transfer_mode": "move",
+            },
+            headers=host_admin_headers,
+        )
+    assert ok_inst.status_code == 200
+    assert not src_gguf.exists()
+
+    orig = llm_manager._provider
+    try:
+        loading_mock = MagicMock()
+        loading_mock.has_active_generation = False
+        loading_mock.is_loaded.return_value = False
+        loading_mock._runtime_state = LLMRuntimeState.MODEL_LOADING
+        llm_manager.set_provider(loading_mock)
+        busy_del = await client.delete("/api/v1/models/registry/atomic-model", headers=host_admin_headers)
+        assert busy_del.status_code == 409
+
+        idle_mock = MagicMock()
+        idle_mock.has_active_generation = False
+        idle_mock.is_loaded.return_value = False
+        idle_mock._runtime_state = LLMRuntimeState.MODEL_UNLOADED
+        llm_manager.set_provider(idle_mock)
+        with patch("app.services.model_import.shutil.rmtree", side_effect=PermissionError("locked by handle")):
+            lock_del = await client.delete("/api/v1/models/registry/atomic-model", headers=host_admin_headers)
+        assert lock_del.status_code == 409
+    finally:
+        llm_manager.set_provider(orig)
+
+
+def test_context_resolution_and_assessment_consistent_on_small_models():
+    """Major 2 regression: resolve_context_size_for_mode() & assess_context_options() agree on <= 4K models."""
+    from app.services.model_registry import assess_context_options, resolve_context_size_for_mode
+
+    gb = 1024 ** 3
+    # 4096-max model in maximum (default 8192) clamps profile context down to 4096
+    assert resolve_context_size_for_mode(8192, "profile", 4096) == 4096
+    opts_4k = {
+        o.mode: o
+        for o in assess_context_options(
+            int(1.0 * gb),
+            profile="maximum",
+            model_max_context=4096,
+            dedicated_vram_gb=16.0,
+            total_ram_gb=32.0,
+        )
+    }
+    assert opts_4k["profile"].context_tokens == 4096
+    assert opts_4k["model_max"].context_tokens == 4096
+    assert resolve_context_size_for_mode(8192, "model_max", 4096) == 4096
+
+    # 2048-max model keeps model_max at 2048 (not forced up to 4096 with exceeds_model_max=True)
+    assert resolve_context_size_for_mode(4096, "model_max", 2048) == 2048
+    assert resolve_context_size_for_mode(4096, "8k", 2048) == 2048
+    opts_2k = {
+        o.mode: o
+        for o in assess_context_options(
+            int(1.0 * gb),
+            profile="balanced",
+            model_max_context=2048,
+            dedicated_vram_gb=16.0,
+            total_ram_gb=32.0,
+        )
+    }
+    assert opts_2k["model_max"].context_tokens == 2048
+    assert opts_2k["model_max"].exceeds_model_max is False
+    assert opts_2k["model_max"].selectable is True

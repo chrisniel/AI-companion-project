@@ -1083,10 +1083,36 @@ class LlamaCppProvider(BaseLLMProvider):
             LLMRuntimeState.MODEL_LOADING,
             LLMRuntimeState.MODEL_UNLOADING,
         ):
-            req_params = self._get_profile_params(self._active_profile)
+            saved_selection = get_saved_model_selection()
+            selected_entry = None
+            entry_max_ctx: Optional[int] = None
+            try:
+                selected_entry = find_model_registry_entry(
+                    self._active_model_name or saved_selection,
+                )
+                raw_entry_ctx = (
+                    getattr(getattr(selected_entry, "manifest", None), "model_max_context", None)
+                    if selected_entry is not None
+                    else None
+                )
+                if isinstance(raw_entry_ctx, int) and not isinstance(raw_entry_ctx, bool):
+                    entry_max_ctx = raw_entry_ctx
+            except Exception:
+                selected_entry = None
+            req_params = self._get_profile_params(
+                self._active_profile,
+                model_max_context=entry_max_ctx,
+            )
             effective_router_running = (
                 (self._server_process is not None and self._server_process.poll() is None)
                 or self._server_is_active
+            )
+            hw = probe_host_hardware()
+            context_options = assess_context_options_for_entry(
+                selected_entry,
+                profile=self._active_profile,
+                dedicated_vram_gb=hw.dedicated_vram_gb,
+                total_ram_gb=hw.total_ram_gb,
             )
             return ModelStatusResponse(
                 provider=self.provider_name,
@@ -1095,16 +1121,21 @@ class LlamaCppProvider(BaseLLMProvider):
                 managed_by_core=self._managed_by_core and effective_router_running,
                 runtime_state=self._runtime_state,
                 active_model=self._active_model_name,
-                selected_model=get_saved_model_selection(),
+                selected_model=saved_selection,
                 model_resident=False,
                 model_loaded=False,
                 model_awake=False,
                 requested_profile=self._active_profile,
+                requested_context_mode=getattr(self, "_context_mode", "profile"),
+                context_options=context_options,
                 applied_profile=self._applied_profile,
                 applied_context_size=self._applied_context_size,
                 applied_gpu_layers=self._applied_gpu_layers,
                 requested_mmproj_offload=req_params.get("mmproj_offload", True),
                 applied_mmproj_offload=self._applied_mmproj_offload,
+                host_gpu_name=hw.gpu_name,
+                host_vram_gb=hw.dedicated_vram_gb,
+                host_ram_gb=hw.total_ram_gb,
                 mmproj_offload=self._applied_mmproj_offload if self._applied_mmproj_offload is not None else req_params.get("mmproj_offload", True),
                 generation_active=self.has_active_generation,
                 last_runtime_error=self._last_error,

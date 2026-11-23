@@ -69,7 +69,7 @@ def _probe_windows_gpu_vram() -> tuple[Optional[str], Optional[float]]:
     try:
         import winreg
 
-        base_key = r"SYSTEM\ControlSet001\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}"
+        base_key = r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}"
         best_name: Optional[str] = None
         best_vram_bytes = 0
 
@@ -93,15 +93,18 @@ def _probe_windows_gpu_vram() -> tuple[Optional[str], Optional[float]]:
                         vram_bytes = 0
                         try:
                             raw_qw = winreg.QueryValueEx(sub_key, "HardwareInformation.qwMemorySize")[0]
-                            vram_bytes = int(raw_qw)
-                        except OSError:
+                            if isinstance(raw_qw, bytes):
+                                vram_bytes = int.from_bytes(raw_qw, "little", signed=False)
+                            else:
+                                vram_bytes = int(raw_qw)
+                        except (OSError, ValueError, TypeError):
                             try:
                                 raw_dw, _ = winreg.QueryValueEx(sub_key, "HardwareInformation.MemorySize")
                                 if isinstance(raw_dw, bytes):
                                     vram_bytes = int.from_bytes(raw_dw, "little", signed=False)
                                 else:
                                     vram_bytes = int(raw_dw) & 0xFFFFFFFF
-                            except OSError:
+                            except (OSError, ValueError, TypeError):
                                 vram_bytes = 0
 
                         # Ignore adapters reporting under 256 MB (basic/virtual stubs)

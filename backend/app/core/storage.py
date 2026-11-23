@@ -411,6 +411,19 @@ def relocate_library_root(
         raise StorageError("Target LIBRARY_ROOT cannot overlap with DATABASE_DIR.")
     if _paths_overlap(target, current_paths.APP_INSTALL_ROOT):
         raise StorageError("Target LIBRARY_ROOT cannot overlap with APP_INSTALL_ROOT.")
+    if _paths_overlap(target, current_paths.CACHE_ROOT):
+        raise StorageError("Target LIBRARY_ROOT cannot overlap with CACHE_ROOT.")
+    if _paths_overlap(target, current_paths.LOG_ROOT):
+        raise StorageError("Target LIBRARY_ROOT cannot overlap with LOG_ROOT.")
+    for reserved in (
+        current_paths.BACKUP_DIR,
+        current_paths.ATTACHMENT_DIR,
+        current_paths.CHARACTER_DIR,
+        current_paths.MEMORY_DIR,
+        current_paths.COMPANION_DATA_ROOT / "config",
+    ):
+        if _paths_overlap(target, reserved):
+            raise StorageError(f"Target LIBRARY_ROOT cannot overlap with reserved runtime directory '{reserved.name}'.")
     if target == current_paths.COMPANION_DATA_ROOT or current_paths.COMPANION_DATA_ROOT.is_relative_to(target):
         raise StorageError("Target LIBRARY_ROOT cannot be DATA_ROOT itself or an ancestor of DATA_ROOT.")
 
@@ -447,6 +460,16 @@ def relocate_library_root(
                 rel_item = item.relative_to(src_dir)
                 dst_item = dst_dir / rel_item
                 dst_item.parent.mkdir(parents=True, exist_ok=True)
+                # Containment: reject symlinks anywhere on the target path inside target
+                probe = dst_item
+                while True:
+                    if os.path.islink(probe):
+                        raise StorageError(
+                            f"Target path contains a symlink component: '{rel_item.as_posix()}'."
+                        )
+                    if probe == target or probe.parent == probe:
+                        break
+                    probe = probe.parent
                 shutil.copy2(item, dst_item)
                 if dst_item.stat().st_size != item.stat().st_size:
                     raise MigrationVerificationError(
