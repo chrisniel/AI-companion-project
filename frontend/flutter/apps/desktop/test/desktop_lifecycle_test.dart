@@ -528,6 +528,37 @@ void main() {
       final resolvedWd = DesktopRuntimeCoordinator.resolveWorkingDirectoryFromBases([runnerDir]);
       expect(resolvedWd, equals('${tempRoot.path}${Platform.pathSeparator}backend'));
     });
+
+    test('onWindowRestored fires only when restoring hidden tray window, not on visible startup', () async {
+      var visibleStartupRestoredCount = 0;
+      coordinator.onWindowRestored = () => visibleStartupRestoredCount++;
+      await coordinator.initialize(showImmediately: true);
+      expect(visibleStartupRestoredCount, equals(0));
+
+      final hiddenWindow = FakeDesktopWindowAdapter();
+      final hiddenTray = FakeDesktopTrayAdapter();
+      final trayCoordinator = DesktopLifecycleCoordinator(
+        windowAdapter: hiddenWindow,
+        trayAdapter: hiddenTray,
+      );
+      var trayRestoredCount = 0;
+      trayCoordinator.onWindowRestored = () => trayRestoredCount++;
+
+      await trayCoordinator.initialize(
+        showImmediately: false,
+        maximizeOnStart: true,
+      );
+      expect(trayRestoredCount, equals(0));
+      expect(hiddenWindow.visible, isFalse);
+
+      trayCoordinator.onTrayIconMouseDown();
+      await pumpEventQueue();
+      expect(trayRestoredCount, equals(1));
+      expect(hiddenWindow.visible, isTrue);
+      expect(hiddenWindow.isMaximized, isTrue);
+
+      await trayCoordinator.dispose();
+    });
   });
 }
 

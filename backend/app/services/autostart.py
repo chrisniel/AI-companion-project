@@ -104,6 +104,7 @@ class WindowsAutostartService:
             "    <LogonTrigger>\n"
             "      <Enabled>true</Enabled>\n"
             f"{user_line}"
+            "      <Delay>PT5S</Delay>\n"
             "    </LogonTrigger>\n"
             "  </Triggers>\n"
             '  <Principals>\n'
@@ -126,7 +127,7 @@ class WindowsAutostartService:
             "    <RunOnlyIfIdle>false</RunOnlyIfIdle>\n"
             "    <WakeToRun>false</WakeToRun>\n"
             "    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>\n"
-            "    <Priority>7</Priority>\n"
+            "    <Priority>5</Priority>\n"
             "  </Settings>\n"
             '  <Actions Context="Author">\n'
             "    <Exec>\n"

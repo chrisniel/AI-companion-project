@@ -67,6 +67,8 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
   String? _modelActionMessage;
   bool _isUpdatingProfile = false;
   bool _allowUnsafeExperimentalCtx = false;
+  bool _isStartingRuntime = false;
+  bool _lastRuntimeOperational = false;
   bool _isScanningInbox = false;
   bool _movePickedFiles = false;
   String? _installingRelativePath;
@@ -94,6 +96,11 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
         section == SettingsSectionId.runtime &&
         _lastSection != SettingsSectionId.runtime;
     final storageChanged = storageRev != _lastStorageRevision;
+    final isOperationalNow =
+        widget.controller.runtimeProcessState?.isOperational ?? false;
+    final runtimeBecameOperational =
+        isOperationalNow && !_lastRuntimeOperational;
+    _lastRuntimeOperational = isOperationalNow;
 
     if (storageChanged) {
       _lastStorageRevision = storageRev;
@@ -107,7 +114,10 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
       }
     }
 
-    if (enteredSettings || enteredRuntimeSection || storageChanged) {
+    if (enteredSettings ||
+        enteredRuntimeSection ||
+        storageChanged ||
+        runtimeBecameOperational) {
       _loadModelData();
     }
     _lastDestination = dest;
@@ -127,6 +137,8 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
     _lastDestination = widget.controller.currentDestination;
     _lastSection = widget.controller.selectedSettingsSection;
     _lastStorageRevision = widget.controller.storageRevision;
+    _lastRuntimeOperational =
+        widget.controller.runtimeProcessState?.isOperational ?? false;
     if (widget.client == null) {
       _advancedExpanded = true;
     }
@@ -187,7 +199,79 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
     );
   }
 
+  bool _isLocalRuntimeRecoverableOffline() {
+    final rc = widget.runtimeCoordinator;
+    if (rc == null || !rc.isLocalLoopback) return false;
+    final status =
+        widget.controller.runtimeProcessState?.status ?? rc.currentState.status;
+    return status == RuntimeStatus.startupTimeout ||
+        status == RuntimeStatus.stopped ||
+        status == RuntimeStatus.dormant ||
+        status == RuntimeStatus.unreachable;
+  }
+
+  Future<void> _startOrRetryLocalRuntime() async {
+    final rc = widget.runtimeCoordinator;
+    if (rc == null || _isStartingRuntime) return;
+    setState(() {
+      _isStartingRuntime = true;
+      _testConnectionResult = 'Starting local AI runtime...';
+    });
+    try {
+      final runtimeState =
+          await rc.ensureRuntimeReady(timeout: const Duration(seconds: 30));
+      if (!mounted) return;
+      setState(() {
+        _isStartingRuntime = false;
+        switch (runtimeState.status) {
+          case RuntimeStatus.readyAndAuthenticated:
+            _testConnectionResult = 'Local runtime ready and authenticated.';
+            break;
+          case RuntimeStatus.reachableUnauthenticated:
+            _testConnectionResult =
+                'Local runtime running, but pairing authentication failed.';
+            break;
+          case RuntimeStatus.alienPortConflict:
+            _testConnectionResult =
+                'Port conflict detected on port ${runtimeState.port}.';
+            break;
+          default:
+            final diag = runtimeState.diagnosticMessage;
+            final suffix =
+                (diag != null && diag.isNotEmpty) ? ': $diag' : '';
+            _testConnectionResult =
+                'Could not start local runtime (${runtimeState.status.name})$suffix';
+        }
+      });
+      if (runtimeState.isOperational) {
+        await _loadModelData();
+        if (widget.chatController != null) {
+          try {
+            await widget.chatController!.checkConnection();
+          } catch (_) {}
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isStartingRuntime = false;
+        _testConnectionResult =
+            'Failed to start local runtime: ${_formatError(e)}';
+      });
+    }
+  }
+
+  Future<void> _handleRefreshAll() async {
+    if (_isLocalRuntimeRecoverableOffline() && !_isStartingRuntime) {
+      await _startOrRetryLocalRuntime();
+    } else {
+      await _loadModelData();
+    }
+  }
+
   Widget _buildTopHeaderBar(CompanionThemeExtension? ext) {
+    final showRetryRuntime =
+        _isLocalRuntimeRecoverableOffline() || _isStartingRuntime;
     return SoftGlassPanel(
       padding: const EdgeInsets.symmetric(
         horizontal: CompanionSpacing.xl,
@@ -214,12 +298,34 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
               ),
             ],
           ),
-          Row(
-            mainAxisSize: MainAxisSize.min,
+          Wrap(
+            spacing: CompanionSpacing.sm,
+            runSpacing: CompanionSpacing.xs,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
+              if (showRetryRuntime)
+                FilledButton.icon(
+                  key: const Key('runtime_top_retry_button'),
+                  onPressed:
+                      _isStartingRuntime ? null : _startOrRetryLocalRuntime,
+                  icon: _isStartingRuntime
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.play_arrow_rounded, size: 16),
+                  label: Text(
+                    _isStartingRuntime
+                        ? 'Starting...'
+                        : 'Start Local Runtime',
+                  ),
+                ),
               FilledButton.tonalIcon(
                 key: const Key('runtime_top_refresh_button'),
-                onPressed: _isLoadingModelCatalog ? null : _loadModelData,
+                onPressed: (_isLoadingModelCatalog || _isStartingRuntime)
+                    ? null
+                    : _handleRefreshAll,
                 icon: _isLoadingModelCatalog
                     ? const SizedBox(
                         width: 14,
@@ -1913,9 +2019,45 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
               _buildDiagnosticRow('Kernel Lockfile', lockPath, ext),
               const Divider(height: CompanionSpacing.md),
               _buildDiagnosticRow('Detached Logfile', logPath, ext),
+              if (runtime?.diagnosticMessage != null &&
+                  runtime!.diagnosticMessage!.trim().isNotEmpty) ...[
+                const Divider(height: CompanionSpacing.md),
+                _buildDiagnosticRow(
+                  'Diagnostic Detail',
+                  runtime.diagnosticMessage!.trim(),
+                  ext,
+                  maxLines: 4,
+                ),
+              ],
             ],
           ),
         ),
+        if (isLoopback &&
+            widget.runtimeCoordinator != null &&
+            (runtime == null ||
+                (!runtime.isOperational &&
+                    runtime.status != RuntimeStatus.launching))) ...[
+          const SizedBox(height: CompanionSpacing.md),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FilledButton.tonalIcon(
+              key: const Key('runtime_supervision_retry_button'),
+              onPressed: _isStartingRuntime ? null : _startOrRetryLocalRuntime,
+              icon: _isStartingRuntime
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.play_arrow_rounded, size: 16),
+              label: Text(
+                _isStartingRuntime
+                    ? 'Starting Runtime...'
+                    : 'Start / Retry Local Runtime',
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: CompanionSpacing.sm),
         Text(
           'Lifecycle Invariant: Closing the window (×) hides to system tray and leaves the background runtime running. Exiting Companion performs authenticated cooperative shutdown of the host runtime.',
@@ -1931,10 +2073,13 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
   Widget _buildDiagnosticRow(
     String label,
     String value,
-    CompanionThemeExtension? ext,
-  ) {
+    CompanionThemeExtension? ext, {
+    int maxLines = 1,
+  }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment:
+          maxLines > 1 ? CrossAxisAlignment.start : CrossAxisAlignment.center,
       children: [
         Text(
           label,
@@ -1943,10 +2088,12 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
             fontWeight: FontWeight.w500,
           ),
         ),
+        const SizedBox(width: CompanionSpacing.md),
         Flexible(
           child: Text(
             value,
             textAlign: TextAlign.end,
+            maxLines: maxLines,
             style: CompanionTypography.bodySmall.copyWith(
               color: ext?.textPrimary,
               fontWeight: FontWeight.w600,
@@ -2164,7 +2311,7 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
                     );
                     final runtimeState =
                         await widget.runtimeCoordinator!.ensureRuntimeReady(
-                      timeout: const Duration(seconds: 10),
+                      timeout: const Duration(seconds: 30),
                     );
                     if (mounted) {
                       setState(() {

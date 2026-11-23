@@ -104,6 +104,7 @@ void main(List<String> args) async {
     AiCompanionDesktopApp(
       coordinator: coordinator,
       settingsController: settingsController,
+      startMinimizedToTray: startMinimizedToTray,
     ),
   );
 
@@ -131,6 +132,7 @@ class AiCompanionDesktopApp extends StatefulWidget {
     this.runtimeCoordinator,
     this.credentialStore,
     this.clientSettings,
+    this.startMinimizedToTray = false,
   });
 
   final DesktopLifecycleCoordinator? coordinator;
@@ -140,6 +142,7 @@ class AiCompanionDesktopApp extends StatefulWidget {
   final DesktopRuntimeCoordinator? runtimeCoordinator;
   final CredentialStore? credentialStore;
   final DesktopClientSettings? clientSettings;
+  final bool startMinimizedToTray;
 
   @override
   State<AiCompanionDesktopApp> createState() => _AiCompanionDesktopAppState();
@@ -236,12 +239,39 @@ class _AiCompanionDesktopAppState extends State<AiCompanionDesktopApp> {
       }
     });
 
-    // Run bounded ensureRuntimeReady automatically in the background
-    unawaited(rc.ensureRuntimeReady());
+    try {
+      widget.coordinator?.onWindowRestored = _handleWindowRestored;
+    } on UnimplementedError {
+      // Minimal Fake coordinators in widget tests may omit optional callbacks.
+    }
+
+    // Cold Windows login autostart needs extra budget while WMI/CIM settles.
+    final startupTimeout = widget.startMinimizedToTray
+        ? const Duration(seconds: 60)
+        : const Duration(seconds: 30);
+    unawaited(rc.ensureRuntimeReady(timeout: startupTimeout));
+  }
+
+  void _handleWindowRestored() {
+    if (!mounted) return;
+    final rc = _runtimeCoordinator;
+    if (rc == null || !rc.isLocalLoopback) return;
+    final status = rc.currentState.status;
+    if (status == RuntimeStatus.startupTimeout ||
+        status == RuntimeStatus.dormant ||
+        status == RuntimeStatus.stopped ||
+        status == RuntimeStatus.unreachable) {
+      unawaited(rc.ensureRuntimeReady(timeout: const Duration(seconds: 30)));
+    }
   }
 
   @override
   void dispose() {
+    try {
+      widget.coordinator?.onWindowRestored = null;
+    } on UnimplementedError {
+      // Minimal Fake coordinators in widget tests may omit optional callbacks.
+    }
     _studioController?.dispose();
     _profileController?.dispose();
     _runtimeSubscription?.cancel();

@@ -286,11 +286,15 @@ def test_autostart_service_xml_and_escaping(monkeypatch, tmp_path):
     ns = {"t": "http://schemas.microsoft.com/windows/2004/02/mit/task"}
     assert root.find(".//t:LogonTrigger/t:Enabled", ns).text == "true"
     assert root.find(".//t:LogonTrigger/t:UserId", ns).text == r"CORP&CO\user<1>"
+    assert root.find(".//t:LogonTrigger/t:Delay", ns).text == "PT5S"
+    trigger_tags = [child.tag.split("}")[-1] for child in root.find(".//t:LogonTrigger", ns)]
+    assert trigger_tags.index("UserId") < trigger_tags.index("Delay")
     assert root.find(".//t:Principal/t:UserId", ns).text == r"CORP&CO\user<1>"
     assert root.find(".//t:Principal/t:RunLevel", ns).text == "LeastPrivilege"
     assert root.find(".//t:Settings/t:DisallowStartIfOnBatteries", ns).text == "false"
     assert root.find(".//t:Settings/t:StopIfGoingOnBatteries", ns).text == "false"
     assert root.find(".//t:Settings/t:ExecutionTimeLimit", ns).text == "PT0S"
+    assert root.find(".//t:Settings/t:Priority", ns).text == "5"
     assert root.find(".//t:Settings/t:RestartOnFailure", ns) is None
     assert root.find(".//t:Exec/t:Command", ns).text == r"C:\AI & ML\Companion<1>\ai_companion_desktop.exe"
     assert root.find(".//t:Exec/t:Arguments", ns).text == "--minimized-to-tray"

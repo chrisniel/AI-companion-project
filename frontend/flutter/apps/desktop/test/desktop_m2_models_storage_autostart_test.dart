@@ -1,12 +1,14 @@
 import 'dart:io';
 
 import 'package:ai_companion_desktop/controllers/desktop_settings_controller.dart';
+import 'package:ai_companion_desktop/coordinator/desktop_runtime_coordinator.dart';
 import 'package:ai_companion_desktop/diagnostics/windows_storage_diagnostic_reader.dart';
 import 'package:ai_companion_desktop/features/settings/settings_section.dart';
 import 'package:ai_companion_desktop/platform/desktop_client_settings.dart';
 import 'package:ai_companion_desktop/platform/windows_shell_adapter.dart';
 import 'package:ai_companion_desktop/screens/settings_screen.dart';
 import 'package:companion_api/companion_api.dart';
+import 'package:companion_core/companion_core.dart';
 import 'package:companion_design/companion_design.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -799,6 +801,110 @@ void main() {
     expect(moveSrc.existsSync(), isFalse);
     expect(File('${inbox.path}${Platform.pathSeparator}move_me.gguf').existsSync(), isTrue);
   });
+
+  testWidgets(
+      'Slice 7 Runtime Supervision renders diagnostic detail and 1-click Start Local Runtime recovery',
+      (tester) async {
+    tester.view.physicalSize = const Size(1280, 960);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    final controller = DesktopSettingsController(
+      initialDestination: DesktopNavDestination.settings,
+      initialSettingsSection: SettingsSectionId.runtime,
+      diagnosticReader: WindowsStorageDiagnosticReader(
+        localAppDataOverride: r'C:\Mock\Local',
+        fileExistsChecker: (_) => false,
+      ),
+    );
+    controller.updateRuntimeState(
+      const RuntimeProcessState(
+        supervisionMode: SupervisionMode.localLoopback,
+        status: RuntimeStatus.startupTimeout,
+        port: 8000,
+        diagnosticMessage:
+            'OS process inspection unavailable on port 8000: Process inspection query timed out after 3000ms',
+      ),
+      null,
+    );
+
+    final offlineClient = _OfflineStatusFakeClient();
+    final fakeRuntime = _FakeRetryRuntimeCoordinator(controller: controller);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: CompanionTheme.dark(),
+        home: Scaffold(
+          body: SettingsScreen(
+            controller: controller,
+            clientSettings: _InMemoryDesktopClientSettings(),
+            credentialStore: InMemoryCredentialStore('test-token'),
+            client: offlineClient,
+            shellAdapter: _FakeDesktopShellAdapter(),
+            runtimeCoordinator: fakeRuntime,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('runtime_top_retry_button')), findsOneWidget);
+    expect(find.text('Diagnostic Detail'), findsOneWidget);
+    expect(
+      find.textContaining('Process inspection query timed out after 3000ms'),
+      findsOneWidget,
+    );
+
+    final supervisionRetryBtn =
+        find.byKey(const Key('runtime_supervision_retry_button'));
+    expect(supervisionRetryBtn, findsOneWidget);
+    await tester.ensureVisible(supervisionRetryBtn);
+    await tester.pumpAndSettle();
+    await tester.tap(supervisionRetryBtn);
+    await tester.pumpAndSettle();
+
+    expect(fakeRuntime.ensureCalls, equals(1));
+    expect(fakeRuntime.lastTimeout, equals(const Duration(seconds: 30)));
+    expect(
+      find.text('Local runtime ready and authenticated.'),
+      findsOneWidget,
+    );
+    fakeRuntime.dispose();
+  });
+}
+
+class _OfflineStatusFakeClient extends FakeM2DesktopClient {
+  @override
+  Future<ModelStatusResponse> getModelStatus({
+    Duration timeout = const Duration(seconds: 10),
+  }) {
+    throw const SocketException('Connection refused');
+  }
+}
+
+class _FakeRetryRuntimeCoordinator extends DesktopRuntimeCoordinator {
+  _FakeRetryRuntimeCoordinator({required this.controller})
+      : super(baseUrl: 'http://127.0.0.1:8000');
+
+  final DesktopSettingsController controller;
+  int ensureCalls = 0;
+  Duration? lastTimeout;
+
+  @override
+  Future<RuntimeProcessState> ensureRuntimeReady({
+    Duration timeout = const Duration(seconds: 30),
+  }) async {
+    ensureCalls++;
+    lastTimeout = timeout;
+    const ready = RuntimeProcessState(
+      supervisionMode: SupervisionMode.localLoopback,
+      status: RuntimeStatus.readyAndAuthenticated,
+      pid: 7777,
+      port: 8000,
+    );
+    controller.updateRuntimeState(ready, null);
+    return ready;
+  }
 }
 
 class _FakeDesktopShellAdapter implements DesktopShellAdapter {

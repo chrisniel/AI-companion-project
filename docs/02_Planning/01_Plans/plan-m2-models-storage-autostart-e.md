@@ -2,7 +2,7 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- **Status:** Phase 2 & Phase 3 Complete — Awaiting Phase 4 Independent Review & Manual Windows Host QA
+- **Status:** Phase 2 & Phase 3 Complete (Through Slice 7) — Awaiting Phase 4 Independent Review & Manual Windows Host QA
 - **Delivery Level:** Level C — Sensitive Design
 - **Scope Mode:** New Feature — M2 Batch E Host Storage Roots & Relocatable Library (`PC-HOST-004`), Decision D6 Controlled Local Model Import, GGUF Header Fix & Schema v3 Registry Writer (`PC-MODEL-001`..`006`), `LlamaCppProvider` Multi-Root Support, Desktop Model Management & Hardware Profile UI (`PC-CLIENT-010`), and Windows Task Scheduler Login Autostart (`PC-HOST-002`). *(Profile PIN lock and Satellite Device Enrollment `PC-IDENTITY-003` remain explicitly deferred per Human Owner direction.)*
 - **Target Files:**
@@ -217,7 +217,17 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
    - **6E. OpenAPI/Dart Parity & Verification:**
      - Regenerate `contracts/openapi/openapi.json`, register `ContextOptionAssessmentOut` and `InboxMmprojOut` in `scripts/check_dart_openapi_parity.py` (`100/100` DTO schemas), update `companion_api` DTOs & `CompanionClient`, add pytest + DTO + Flutter widget tests covering UTF-16 Task Scheduler XML, CTX dropdown guardrails + unsafe toggle, multi-`mmproj` header matching + incompatible rejection + override dropdown, and reasoning detection (`always_on` / `toggleable` / `unsupported`), and re-run full backend, parity, Flutter, and Windows MSVC build checks.
 
-7. **Phase 3 Documentation, Packaging & Draft PR:**
+7. **Slice 7 (Live Windows Cold-Boot Reboot QA Fix — Task Scheduler Delay/Priority, Process Discovery Timeout Retry, Tray Restore Auto-Retry & Settings Runtime Recovery):**
+   - **7A. Windows Task Scheduler Logon Delay & Normal Priority (`backend/app/services/autostart.py`):**
+     - Emit `<Delay>PT5S</Delay>` strictly after `<UserId>` inside `<LogonTrigger>` (`<Enabled>` -> `<UserId>` -> `<Delay>` per Task Scheduler v1.2 XSD sequence) and raise `<Priority>` from `7` (Below Normal) to `5` (Normal) so WMI and system tray initialization complete cleanly before logon launch.
+   - **7B. Cold-Boot Process Discovery Resilience & Tray-Restore Auto-Retry (`windows_runtime_process_supervisor.dart`, `desktop_runtime_coordinator.dart`, `desktop_lifecycle_coordinator.dart`, `main.dart`):**
+     - Increase `discoverRuntimeProcesses()` default timeout from `3s` to `12s` (`findActiveRuntimeProcess()` to `10s`) and respect remaining startup budget.
+     - In `DesktopRuntimeCoordinator._ensureLocalLoopbackReady()`, retry transient timeout-only `ProcessDiscoveryStatus.inspectionUnavailable` results up to 3 total attempts with `1s` backoff within remaining startup budget while preserving immediate fail-closed termination on non-timeout errors (`Access denied`, malformed output) or exhausted retries.
+     - Give `--minimized-to-tray` / `--autostart` launches a `60s` startup timeout in `AiCompanionDesktopApp`, and wire `DesktopLifecycleCoordinator.onWindowRestored` so opening the window from tray while local loopback runtime is offline (`startupTimeout` / `dormant` / `stopped` / `unreachable`) automatically triggers a fresh `ensureRuntimeReady(timeout: 30s)`.
+   - **7C. Settings Runtime Diagnostics & 1-Click Local Runtime Recovery (`settings_runtime_section.dart`):**
+     - Surface `runtime.diagnosticMessage` (`Diagnostic Detail`) in **Runtime Process Supervision**, add **Start / Retry Local Runtime** buttons (`runtime_top_retry_button` and `runtime_supervision_retry_button`), wire **Refresh All** to recover offline local runtime first, auto-reload models when runtime becomes operational, and increase **Apply & Save** `ensureRuntimeReady()` timeout from `10s` to `30s`.
+
+8. **Phase 3 Documentation, Packaging & Draft PR:**
    - Reconcile canonical specs (`storage-and-assets.md`, `runtime-and-models.md`, `windows-host-and-notifications.md`), `WBS.md`, `MASTER_CHECKLIST.md`, `DELIVERY_INDEX.md`, `SPRINT_ROADMAP.md`, `DECISION_DEBT.md`, `task.md`, `CHANGELOG.md`, walkthrough (`walkthrough-m2-models-storage-autostart-e.md`), archived branch tracker, push updated commits to `origin/feature/m2-models-storage-autostart-e` (PR #47), and stop for Phase 4 Independent Review.
 
 ---
@@ -225,18 +235,17 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 ## 5. Acceptance Criteria & Verification Strategy
 
 ### Automated Repository Checks
-- [x] Backend test suite: `backend\.venv\Scripts\python.exe -m pytest backend\tests backend\tests\test_import_isolation.py scripts\tests\test_python_dependency_lock.py -q -p no:cacheprovider -o log_file=NUL` (`928 passed, 100 warnings, 4 subtests passed` in `319.76s`)
-- [x] Import isolation & dependency lock check: included cleanly above (`test_import_isolation.py` + `test_python_dependency_lock.py`)
+- [x] Slice 7 targeted backend & import isolation check: `backend\.venv\Scripts\python.exe -m pytest backend\tests\test_d6_model_import_and_autostart.py backend\tests\test_import_isolation.py -v -p no:cacheprovider -o log_file=NUL` (`16 passed in 7.49s`) *(full backend suite `928 passed, 100 warnings, 4 subtests passed` in `319.76s` verified at Slice 6 `4c71c1e`)*
 - [x] OpenAPI contract drift check: `backend\.venv\Scripts\python.exe scripts\check_openapi_contract.py --check` (`86 routes`)
-- [x] OpenAPI & Dart contract parity: `backend\.venv\Scripts\python.exe scripts\check_dart_openapi_parity.py --check` (`100/100` schemas, `111/111` native routes) and `backend\.venv\Scripts\python.exe -m unittest scripts\tests\test_check_dart_openapi_parity.py -v` (`8/8 OK` in `0.250s`)
-- [x] Dart static analysis & SDK tests: `cd frontend\flutter && dart analyze .` (`0` issues), `cd frontend\flutter\packages\companion_core && dart test` (`24/24`), and `cd frontend\flutter\packages\companion_api && dart test` (`115/115`)
-- [x] Flutter Desktop test suite & Windows MSVC build: `cd frontend\flutter\apps\desktop && flutter test --no-pub --concurrency=1 test` (`437/437` passed) and `flutter build windows --debug --no-pub` (`ai_companion_desktop.exe`, `13.4s`)
-- [x] Diff hygiene: `git diff --check develop` (clean exit 0)
+- [x] OpenAPI & Dart contract parity: `backend\.venv\Scripts\python.exe scripts\check_dart_openapi_parity.py --check` (`100/100` schemas, `111/111` native routes) *(parity unittest `8/8 OK` in `0.250s` verified at `4c71c1e`, scripts unchanged in Slice 7)*
+- [x] Dart static analysis: `cd frontend\flutter && dart analyze .` (`No issues found!`) *(`companion_core` `24/24` and `companion_api` `115/115` verified at `4c71c1e`, SDK packages unchanged in Slice 7)*
+- [x] Flutter Desktop test suite & Windows MSVC build: `cd frontend\flutter\apps\desktop && flutter test --no-pub --concurrency=1 test` (`441/441` passed in `03:30`) and `flutter build windows --debug --no-pub` (`ai_companion_desktop.exe`, `20.1s`)
+- [x] Diff hygiene: `git diff --check develop` (clean exit 0 prior to staging)
 
 ### Manual & Host-Level Checks (Windows Desktop)
 - [ ] Inspect `Settings -> Storage`: use native **Choose Folder...** (`IFileOpenDialog`) to relocate the Library Folder to a secondary directory, confirm `bootstrap.json` + **Refresh All** + Runtime's `Add Local Models` inbox path update in sync (without stale scan results), and expand **Advanced Storage Diagnostics** to verify all 5 roots + **Copy Path** / **Open Folder**.
 - [ ] Inspect `Settings -> AI Runtime & Models`: verify detected GPU VRAM / host RAM badge matches the PC (`RX 580 8.0 GB` no longer recommends `maximum` for `Qwen3-VL 8B`); use **Add Model Files...** (testing Copy/Move toggle, multi-format safety warning, single-file VL detection + **`Attach mmproj...`**, header-verified multi-`mmproj` auto-pairing + override dropdown, `Reasoning` badge detection, and per-candidate CTX fit summary), click **Scan Inbox**, **Install Bundle**, select/load it, switch `Eco` / `Balanced` / `Maximum` and test the unified **Context Length (`CTX`)** dropdown (`Auto`, `2K`..`Model Max`, overflow prevention + **Allow unsafe experimental CTX** toggle + model-switch reset banner), and test Uninstall on a user-installed model.
-- [ ] Inspect `Settings -> General`: toggle **Launch at Windows Login (Minimized to Tray)** on/off confirming clean registration without UTF-16 encoding errors (`(1,40)::ERROR: unable to switch the encoding`) or HTTP 400 `Access is denied`, verify `schtasks /Query /TN AICompanionAutostart /XML` shows UTF-16 XML with `<UserId>` inside `<LogonTrigger>` & `<Principal id="Author">` + `LeastPrivilege` + `<WorkingDirectory>` + `--minimized-to-tray` without UAC prompts, and confirm maximized normal boot + `--minimized-to-tray` hidden boot maximizing cleanly on first restore + intentional `Exit Companion` remaining stopped.
+- [ ] Inspect `Settings -> General`: toggle **Launch at Windows Login (Minimized to Tray)** off and back on once to refresh the registered Task Scheduler XML, verify `schtasks /Query /TN AICompanionAutostart /XML` shows UTF-16 XML with `<UserId>` followed by `<Delay>PT5S</Delay>` inside `<LogonTrigger>`, `<Principal id="Author">`, `LeastPrivilege`, `<WorkingDirectory>`, and `--minimized-to-tray` without UAC prompts, reboot Windows and confirm automatic tray launch + `pythonw.exe` runtime reaches `readyAndAuthenticated` (both in tray and after opening Settings), plus confirm maximized normal boot and intentional `Exit Companion` remaining stopped.
 
 ---
 

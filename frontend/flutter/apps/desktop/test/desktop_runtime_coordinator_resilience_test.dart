@@ -890,5 +890,98 @@ void main() {
       await realHandle.close();
       await tempDir.delete(recursive: true);
     });
+
+    test('Transient discovery timeout retries up to 3 attempts and spawns cleanly on recovery', () async {
+      final tempDir = await Directory.systemTemp.createTemp('retry_discovery_ok_test_');
+      final tempLockFile = File('${tempDir.path}\\runtime.lock');
+      await tempLockFile.writeAsString('');
+      final realHandle = await tempLockFile.open(mode: FileMode.append);
+
+      final supervisor = _SequentialDiscoveryMockSupervisor([
+        const ProcessDiscoveryResult(
+          status: ProcessDiscoveryStatus.inspectionUnavailable,
+          diagnostic: 'Process inspection query timed out after 12000ms',
+        ),
+        const ProcessDiscoveryResult(status: ProcessDiscoveryStatus.noProcess),
+      ]);
+      supervisor.mockHandle = realHandle;
+      supervisor.listenOnSpawn = true;
+
+      final coordinator = DesktopRuntimeCoordinator(
+        baseUrl: 'http://127.0.0.1:8000',
+        supervisor: supervisor,
+        client: DelayedAuthClient(authDelay: Duration.zero),
+        customLockFile: tempLockFile,
+        customExecutablePath: Platform.resolvedExecutable,
+      );
+
+      final result = await coordinator.ensureRuntimeReady(timeout: const Duration(seconds: 15));
+
+      expect(supervisor.discoveryCallCount, equals(2));
+      expect(supervisor.spawnCallCount, equals(1));
+      expect(result.status, equals(RuntimeStatus.readyAndAuthenticated));
+
+      coordinator.dispose();
+      await realHandle.close();
+      await tempDir.delete(recursive: true);
+    });
+
+    test('Exhausted discovery timeouts fail closed into startupTimeout without spawning', () async {
+      final tempDir = await Directory.systemTemp.createTemp('retry_discovery_fail_test_');
+      final tempLockFile = File('${tempDir.path}\\runtime.lock');
+      await tempLockFile.writeAsString('');
+      final realHandle = await tempLockFile.open(mode: FileMode.append);
+
+      final supervisor = _SequentialDiscoveryMockSupervisor(
+        List.filled(
+          4,
+          const ProcessDiscoveryResult(
+            status: ProcessDiscoveryStatus.inspectionUnavailable,
+            diagnostic: 'Process inspection query timed out after 12000ms',
+          ),
+        ),
+      );
+      supervisor.mockHandle = realHandle;
+
+      final coordinator = DesktopRuntimeCoordinator(
+        baseUrl: 'http://127.0.0.1:8000',
+        supervisor: supervisor,
+        client: DelayedAuthClient(authDelay: Duration.zero),
+        customLockFile: tempLockFile,
+        customExecutablePath: Platform.resolvedExecutable,
+      );
+
+      final result = await coordinator.ensureRuntimeReady(timeout: const Duration(seconds: 15));
+
+      expect(supervisor.discoveryCallCount, equals(3));
+      expect(supervisor.spawnCallCount, equals(0));
+      expect(result.status, equals(RuntimeStatus.startupTimeout));
+      expect(result.diagnosticMessage, contains('timed out'));
+
+      coordinator.dispose();
+      await realHandle.close();
+      await tempDir.delete(recursive: true);
+    });
   });
+}
+
+class _SequentialDiscoveryMockSupervisor extends DiscoveryControlledMockSupervisor {
+  _SequentialDiscoveryMockSupervisor(this._responses);
+
+  final List<ProcessDiscoveryResult> _responses;
+  int discoveryCallCount = 0;
+
+  @override
+  Future<ProcessDiscoveryResult> discoverRuntimeProcesses({
+    required int port,
+    required String expectedExecutable,
+    Duration timeout = const Duration(seconds: 12),
+  }) async {
+    final idx = discoveryCallCount;
+    discoveryCallCount++;
+    if (idx < _responses.length) {
+      return _responses[idx];
+    }
+    return _responses.last;
+  }
 }

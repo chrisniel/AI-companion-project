@@ -42,6 +42,7 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
   Future<void> Function()? onExitMenuTriggered;
   Future<void> Function()? onKillSwitchTriggered;
   Future<void> Function()? onMuteToggleTriggered;
+  VoidCallback? onWindowRestored;
   bool _globalKillSwitchActive = false;
   bool _audioMuted = false;
 
@@ -310,12 +311,16 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
   /// Restores the window from hidden/minimized state and requests focus.
   Future<void> restoreAndFocusWindow() async {
     if (_isDisposed) return;
+    final wasHidden = !_isWindowVisible;
     await windowAdapter.show();
     await windowAdapter.focus();
     _isWindowVisible = true;
     if (_pendingMaximizeOnFirstShow && !_isDisposed) {
       _pendingMaximizeOnFirstShow = false;
       await windowAdapter.maximize();
+    }
+    if (wasHidden && _isInitialized && !_isDisposed) {
+      onWindowRestored?.call();
     }
   }
 

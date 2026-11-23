@@ -731,14 +731,49 @@ class DesktopRuntimeCoordinator {
         _activeRuntimeInfo = null;
       }
 
-      // 5. Evaluate OS process candidates on targetPort under exclusive lock
-      final discovery = await _supervisor.discoverRuntimeProcesses(
-        port: targetPort,
-        expectedExecutable: targetExecutablePath,
-      );
-      if (generation != _activeGeneration || _isDisposed) return _currentState;
+      // 5. Evaluate OS process candidates on targetPort under exclusive lock.
+      // Retry transient WMI/CIM inspection timeouts on cold Windows logon while
+      // continuing to fail closed on access errors or exhausted attempts.
+      ProcessDiscoveryResult? discovery;
+      for (var attempt = 0; attempt < 3; attempt++) {
+        final remaining = remainingTime();
+        if (remaining <= Duration.zero) {
+          discovery = const ProcessDiscoveryResult(
+            status: ProcessDiscoveryStatus.inspectionUnavailable,
+            diagnostic:
+                'Startup budget exhausted before OS process inspection completed',
+          );
+          break;
+        }
+        final discoveryTimeout = remaining < const Duration(seconds: 12)
+            ? remaining
+            : const Duration(seconds: 12);
+        discovery = await _supervisor.discoverRuntimeProcesses(
+          port: targetPort,
+          expectedExecutable: targetExecutablePath,
+          timeout: discoveryTimeout,
+        );
+        if (generation != _activeGeneration || _isDisposed) return _currentState;
 
-      switch (discovery.status) {
+        final isTimeoutFailure =
+            discovery.status == ProcessDiscoveryStatus.inspectionUnavailable &&
+                (discovery.diagnostic ?? '').toLowerCase().contains('timed out');
+        if (!isTimeoutFailure || attempt >= 2) {
+          break;
+        }
+
+        final remAfter = remainingTime();
+        if (remAfter <= const Duration(seconds: 2)) {
+          break;
+        }
+        final backoff = remAfter < const Duration(seconds: 1)
+            ? remAfter
+            : const Duration(seconds: 1);
+        await Future<void>.delayed(backoff);
+        if (generation != _activeGeneration || _isDisposed) return _currentState;
+      }
+
+      switch (discovery!.status) {
         case ProcessDiscoveryStatus.verified:
           final verified = discovery.verifiedProcess!;
           final recoveredDesc = RuntimeLockfileData(
