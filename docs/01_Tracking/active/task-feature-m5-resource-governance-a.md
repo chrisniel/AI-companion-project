@@ -12,7 +12,8 @@
 - [x] Author unified M5 implementation plan & Batch A spec (`plan-m5-resource-governance-a.md`)
 - [x] Fold Phase 1 Independent Plan Review findings (4 Blocking + Major/Minor adjustments) into `plan-m5-resource-governance-a.md`
 - [x] Complete Phase 1 Independent Plan Reviewer sign-off (`APPROVED`)
-- [ ] Publish Phase 1 commit to `origin/feature/m5-resource-governance-a` and obtain Human Plan Approval
+- [x] Publish Phase 1 plan & second-pass clarifications to `origin/feature/m5-resource-governance-a`
+- [ ] Obtain Human Plan Approval before starting Phase 2 implementation
 - [ ] Phase 2 Slice A1: Fast-Boot Startup Optimization (Win32 C++ `WindowsShellChannel` + `DesktopProcessInspector`, `350ms` loopback probe vs `2s` health, schema fast-path, post-yield cancellable sweeps)
 - [ ] Phase 2 Slice A2: ISO-8601 Timestamp Localization, Bold+Em-Dash Markdown & Kokoro TTS Polish
 - [ ] Phase 2 Slice A3: Host Resource Governance & Gaming Mode Engine (`PC-RESOURCE-001`..`004`, `DEBT-V1-07`, `GET`/`PUT /api/v1/system/resources`)
