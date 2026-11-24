@@ -117,32 +117,36 @@ Verified in `backend/app/core/config.py`:
 - **Current Development Reference Baseline:** Current testing and development is conducted on an AMD Radeon RX 580 (8 GB VRAM, Vulkan acceleration). *(This configuration represents current development test hardware reality, not a universal product requirement or permanent architectural gate).*
 - **Voice Resource Strategy:** Voice synthesis and recognition CPU/RAM-first execution represents a development reference strategy, not an implemented Voice runtime and not a permanent hardware rule.
 
-### 3.2 Implemented Reality Boundaries
+### 3.2 Implemented Reality Boundaries & M5 Batch A Delivery
 
-- **Dynamic Gaming / Low-Impact Automatic Policy:** **NOT IMPLEMENTED**. The current codebase contains no automatic process monitor or dynamic policy throttler.
-- **Dynamic VRAM Scaling Status:** **NOT IMPLEMENTED**. GPU layer allocation is determined at model load time and cannot dynamically adjust to foreground GPU pressure without reloading or recycling the provider process.
-- **Hardware-Aware VRAM Budgeting & Recommendation Status:** **NOT ENFORCED (PC-CLIENT-010)**. Real-time automated measurement of dedicated VRAM, 50% budgeting formulas, and dynamic hardware-aware model recommendations are target capabilities tracked under `PC-CLIENT-010`. Current runtime relies on static profiles (`eco`, `balanced`, `maximum`) with user-selected models.
+- **Dynamic Gaming / Low-Impact Policy (`PC-RESOURCE-001`..`004`, `DEBT-V1-07` — Implemented & Automated-Verified in M5 Batch A):**
+  - `ResourceGovernor` (`backend/app/services/resource_governor.py`) implements the three-state host policy (`normal`, `low_impact`, `auto`) in a background asyncio monitor (`RESOURCE_POLL_INTERVAL_SECONDS = 5.0`), persisting normalized lowercase `.exe` watchlists, `low_impact_strategy` (`cpu_eco`, `unload_when_idle`, `lightweight_model`), `low_impact_model_id`, and `cooldown_seconds` (`5`–`300`, default `30s`) under the `"resource_policy"` section of `host_config.json` with `threading.RLock` + unique atomic temp files (`host_config.py`).
+  - Standard-user Win32 `ctypes` `CreateToolhelp32Snapshot` process scanning matches watched basenames with hysteresis cooldown (skipping active-turn transitions cleanly with `deferred_active_turn` / `deferred_model_load` and resetting cooldown immediately on explicit `PUT` mode changes).
+  - Non-blocking `apply_resource_policy()` hooks (`BaseLLMProvider`, `LlamaCppProvider`, `MockLLMProvider`) support `cpu_eco` (`0` GPU layers / `eco` router profile), `unload_when_idle` (`RESOURCE_LOW_IMPACT_IDLE_SECONDS = 60.0`), and `lightweight_model` substitution with fail-closed `lightweight_model_missing` / `lightweight_model_unavailable` fallback to `cpu_eco`, plus lazy `Normal` exit (restoring requested selection/profile cleanly without eagerly reloading the heavy model until needed).
+  - `should_defer_background_work` hooks defer non-explicit automatic memory extraction (`orchestrator.py`) and periodic memory sweeps + non-bypass Routines (`scheduler/service.py`) during active `Low-Impact` while strictly preserving explicit `"Remember that..."` requests, foreground chat/voice/tools, Alarms, Reminders, and Task due reminders per Decision D10.
+  - `hardware_probe.py` exposes `None`-safe live RAM (`probe_live_system_memory()`) and `None` GPU telemetry (`probe_live_gpu_telemetry()` returning `None` / UI `Unavailable` until a verified live adapter is integrated, honoring §2.3 anti-fabrication rules).
+  - Host-Admin `GET`/`PUT /api/v1/system/resources` (`NON_DB_GET_PATHS` read exemption; `503` write guard during shutdown), OpenAPI/`companion_api` DTOs, Desktop `Settings -> Performance & Gaming` (`SettingsPerformanceSection`), and Tray `Performance Mode` submenu synchronization are implemented and automated-verified; live Windows OS gaming/VRAM validation (`DEBT-EXP-001`) remains pending manual QA.
+- **Dynamic VRAM Scaling Status:** **NOT IMPLEMENTED**. GPU layer allocation is determined at model load time and recycles cleanly via `LlamaCppProvider` transitions rather than adjusting mid-inference.
+- **Hardware-Aware VRAM Budgeting & Recommendation Status:** Advisory profile/CTX recommendations (`assess_hardware_suitability()`, `assess_context_options()`) are implemented (`PC-CLIENT-010`), while strict dynamic 50% dedicated VRAM budgeting and live GPU telemetry probing (`host_vram_used_gb` / `gpu_utilization_percent`) remain open target enhancements.
 
 ---
 
-## 4. Approved Target Architecture / Not Yet Implemented (PC V1)
+## 4. Remaining Target Architecture / Open Verification (PC V1)
 
-When implemented for PC V1, the resource governance capability provides:
+Remaining PC V1 performance & resource governance items outside M5 Batch A:
 
-1. **Three-State Performance Policy (`Normal`, `Low-Impact`, `Auto`):** User-selectable performance state accessible via Flutter Settings and the System Tray menu.
-2. **Option B Game & Heavy App Detection:** In `Auto` mode, an OS process monitor checks against a user-configurable list of executable names (e.g. games, 3D software) to engage `Low-Impact` mode automatically.
-3. **Low-Impact Model Substitution:** Optional automatic swap to a compatible lightweight local text model (e.g. 1B-3B) to free VRAM for heavy foreground graphics tasks.
-4. **Deferred Background Tasks:** Pauses non-critical background jobs during `Low-Impact` mode while preserving alarm and reminder firing.
+1. **Live Reference Hardware Benchmark (`DEBT-EXP-001`):** Empirical Windows desktop QA with real heavy `.exe` launches, lightweight model swap latency/VRAM measurements on AMD RX 580, and D10 alarm firing during `Low-Impact`.
+2. **Real-Time Live GPU Utilization / VRAM Adapter & 50% VRAM Dynamic Gate (`PC-CLIENT-010`):** Optional Windows PDH/DXGI/WMI live GPU utilization & VRAM usage probe replacing `None` (`Unavailable`) live GPU fields, plus strict capacity fail-closed enforcement.
 
 ---
 
 ## 5. Open Technical Details & Decision Debt
 
-Detailed implementation choices for future planning are tracked in [`docs/02_Planning/00_Master/DECISION_DEBT.md`](../../02_Planning/00_Master/DECISION_DEBT.md):
+Detailed implementation choices and resolved items are tracked in [`docs/02_Planning/00_Master/DECISION_DEBT.md`](../../02_Planning/00_Master/DECISION_DEBT.md):
 
-- **Process Polling Interval:** Polling frequency and CPU cost of scanning running process names in `Auto` mode (e.g., 5-second tick).
-- **Hysteresis & Cooldown Delay:** Cooldown timer (e.g., 30–60 seconds) after a game exits before swapping back to the heavy model to avoid thrashing during restarts.
-- **Model Swap Transition UX:** Visual indicator in the Flutter client showing when a model swap or low-impact throttle is currently in progress.
+- **Process Polling Interval & Watchlist Storage (`DEBT-V1-07` — Resolved in M5 Batch A):** `ResourceGovernor` polls every `5.0s` using standard-user Win32 `CreateToolhelp32Snapshot`, stores lowercase `.exe` basenames in `host_config.json`, and enforces configurable `5`–`300s` (default `30s`) hysteresis cooldown.
+- **Model Swap Transition UX:** Desktop `Settings -> Performance & Gaming` displays explicit `Requested` vs `Applied` telemetry, cooldown countdown, and non-blocking `transitionState` (`switching` / `deferred_active_turn` / `deferred_model_load`) indicators alongside System Tray submenu checks.
+- **Benchmark Tuning (`DEBT-EXP-001`):** Empirical RX 580 latency & VRAM benchmark remains open pending manual hardware runs.
 
 ---
 

@@ -171,8 +171,12 @@ Verified in `backend/app/services/llm/`:
   - `async generate_stream(messages: List[ChatMessage], temperature: float = 0.7, max_tokens: int = 1024, **kwargs) -> AsyncGenerator[str, None]`
   - `def signal_shutdown_immediately() -> None`
   - `async shutdown(drain_timeout: Optional[float] = None, lock_timeout: float = 2.0) -> ProviderShutdownResult`
+  - `@property has_active_generation -> bool`
+  - `async apply_resource_policy(*, low_impact_active: bool, strategy: str, lightweight_model_id: Optional[str] = None) -> ResourceApplyOutcome`
+  - `def get_resource_override_status() -> dict[str, Any]`
 - **Concrete Providers:**
   - `LlamaCppProvider` (`llama_cpp.py`): Connects to a local router or launches standalone `llama-server.exe`, tracks Core-managed process state, loads/unloads models via router API, applies profiles, and manages idle sleep/unload lifecycles.
+    - *Resource Governance & Low-Impact Hooks (`M5 Batch A`):* `apply_resource_policy()` inspects active generation and `_lock.locked()` / transitional load-unload states without blocking (`deferred_active_turn` / `deferred_model_load`), applies `cpu_eco` (`eco` / `0` GPU layers via `_effective_profile_name()`), `unload_when_idle` (`RESOURCE_LOW_IMPACT_IDLE_SECONDS = 60.0` via `_unload_model_locked()` / `_stop_idle_managed_router_locked()`), or `lightweight_model` swaps (`_effective_model_name()` with fail-closed `lightweight_model_missing` / `lightweight_model_unavailable` fallback to `cpu_eco`), executes lazy `Normal` exit (unloading temporary Low-Impact state without eagerly reloading the heavy primary model until needed), and preserves explicit `0`/`is not None` transitional status snapshots (`context_size`, `gpu_layers`).
     - *Strict Lock Ownership & Cancellation-Aware Loading (`PC-HOST-005`):* `load_model()` checks `_shutdown_signaled` and uses `_sleep_or_abort()` to abort cooperatively during polling; `shutdown()` acquires `self._lock` with bounded timeout (`2.0s`), returning a structured `ProviderShutdownResult` and strictly avoiding unlocked mutations.
     - *Inference Draining & Crash Isolation:* `shutdown()` drains active streams up to `drain_timeout` (`4.0s` default). If generation remains active after timeout, Route B `self._llm` and router state are safely retained to prevent native crashes.
     - *Core-Managed vs. External Router Separation:* Core-managed `llama-server.exe` processes are terminated via `_stop_managed_router_locked()`; externally owned routers have model weights evicted via router API without terminating the foreign server process.
