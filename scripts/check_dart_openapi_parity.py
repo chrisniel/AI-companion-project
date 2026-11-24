@@ -285,6 +285,15 @@ SCHEMA_TO_DART_CLASS: Dict[str, Tuple[str, str]] = {
     "ModelImportInstallRequest": ("model_registry_dto.dart", "ModelImportInstallRequest"),
     "ModelImportInstallOut": ("model_registry_dto.dart", "ModelImportInstallOut"),
     "ModelDeleteOut": ("model_registry_dto.dart", "ModelDeleteOut"),
+    # M5 Batch A Host Resource Governance & Auto Gaming DTOs
+    "ResourcePolicyStatusOut": ("system_status_dto.dart", "ResourcePolicyStatusOut"),
+    "ResourcePolicyUpdateRequest": ("system_status_dto.dart", "ResourcePolicyUpdateRequest"),
+}
+
+
+M5_ROUTE_DART_METHODS: Dict[Tuple[str, str], Tuple[str, str]] = {
+    ("GET", "/api/v1/system/resources"): ("getResourcePolicy", "/api/v1/system/resources"),
+    ("PUT", "/api/v1/system/resources"): ("updateResourcePolicy", "/api/v1/system/resources"),
 }
 
 
@@ -534,6 +543,12 @@ def verify_route_coverage(openapi_data: Dict[str, Any]) -> Tuple[List[str], List
         else:
             errors.append(f"[Route Coverage] Required M4 route missing from OpenAPI: {method} {path}")
 
+    for method, path in sorted(M5_ROUTE_DART_METHODS):
+        if (method, path) in all_openapi_routes:
+            verified_m1.append((method, path))
+        else:
+            errors.append(f"[Route Coverage] Required M5 route missing from OpenAPI: {method} {path}")
+
     # Check unmapped routes against catalog
     unmapped_cataloged: List[Tuple[str, str, str]] = []
     unaccounted_routes: List[Tuple[str, str]] = []
@@ -544,6 +559,7 @@ def verify_route_coverage(openapi_data: Dict[str, Any]) -> Tuple[List[str], List
             or (method, path) in M2_ROUTE_DART_METHODS
             or (method, path) in M3_ROUTE_DART_METHODS
             or (method, path) in M4_ROUTE_DART_METHODS
+            or (method, path) in M5_ROUTE_DART_METHODS
         ):
             continue
         if (method, path) in UNMAPPED_FUTURE_ROUTES:
@@ -578,6 +594,7 @@ def verify_companion_client_implementations(client_path: Path) -> Tuple[List[str
         **M2_ROUTE_DART_METHODS,
         **M3_ROUTE_DART_METHODS,
         **M4_ROUTE_DART_METHODS,
+        **M5_ROUTE_DART_METHODS,
     }
     for (http_method, openapi_path), (method_name, dart_path_template) in sorted(covered_methods.items()):
         method_pattern = rf"\b{re.escape(method_name)}\s*\("
@@ -654,7 +671,7 @@ def run_checks() -> Tuple[bool, str]:
         all_errors.extend(route_errors)
 
     report_lines.append(
-        f"\n[M1 + M2 + M3 + M4 Native Covered Routes: {len(verified_m1)}/{len(M1_COVERED_ROUTES) + len(M2_ROUTE_DART_METHODS) + len(M3_ROUTE_DART_METHODS) + len(M4_ROUTE_DART_METHODS)}]"
+        f"\n[M1 + M2 + M3 + M4 + M5 Native Covered Routes: {len(verified_m1)}/{len(M1_COVERED_ROUTES) + len(M2_ROUTE_DART_METHODS) + len(M3_ROUTE_DART_METHODS) + len(M4_ROUTE_DART_METHODS) + len(M5_ROUTE_DART_METHODS)}]"
     )
     for method, path in verified_m1:
         report_lines.append(f"  [OK] {method:<6} {path}")
@@ -669,7 +686,7 @@ def run_checks() -> Tuple[bool, str]:
         all_errors.extend(client_errors)
 
     report_lines.append(
-        f"\n[Verified CompanionClient Route Methods: {len(verified_impls)}/{len(M1_ROUTE_DART_METHODS) + len(M2_ROUTE_DART_METHODS) + len(M3_ROUTE_DART_METHODS) + len(M4_ROUTE_DART_METHODS)}]"
+        f"\n[Verified CompanionClient Route Methods: {len(verified_impls)}/{len(M1_ROUTE_DART_METHODS) + len(M2_ROUTE_DART_METHODS) + len(M3_ROUTE_DART_METHODS) + len(M4_ROUTE_DART_METHODS) + len(M5_ROUTE_DART_METHODS)}]"
     )
     for method, path, dart_method in verified_impls:
         report_lines.append(f"  [OK] {method:<6} {path:<48} -> {dart_method}()")

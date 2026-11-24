@@ -200,3 +200,46 @@ def test_migration_015_downgrade_fails_closed_when_data_exists(tmp_path):
     assert "trg_profiles_active_character_owner_insert" in triggers
     assert "trg_profiles_active_character_owner_update" in triggers
     assert "trg_character_instances_deactivate_clear_profile" in triggers
+
+
+def test_resolve_single_alembic_head_fast_handles_linear_and_branched_chains(tmp_path):
+    """Fast revision resolver returns linear head and returns None on branched chains."""
+    from app.core.storage import _resolve_single_alembic_head_fast
+
+    real_migrations = Path(__file__).resolve().parent.parent / "migrations"
+    assert _resolve_single_alembic_head_fast(real_migrations) == HEAD_REVISION
+
+    branched_versions = tmp_path / "migrations" / "versions"
+    branched_versions.mkdir(parents=True)
+    (branched_versions / "001_root.py").write_text(
+        'revision = "001_root"\ndown_revision = None\n',
+        encoding="utf-8",
+    )
+    (branched_versions / "002_a.py").write_text(
+        'revision = "002_a"\ndown_revision = "001_root"\n',
+        encoding="utf-8",
+    )
+    (branched_versions / "002_b.py").write_text(
+        'revision = "002_b"\ndown_revision = ("001_root",)\n',
+        encoding="utf-8",
+    )
+    assert _resolve_single_alembic_head_fast(tmp_path / "migrations") is None
+
+
+def test_prepare_database_schema_skips_alembic_upgrade_when_already_at_head(tmp_path, monkeypatch):
+    """When existing valid DB already matches single linear head, Alembic command.upgrade is skipped."""
+    canonical_db = tmp_path / "canonical" / "database" / "companion.db"
+    backup_dir = tmp_path / "canonical" / "backups"
+
+    head_rev = prepare_database_schema(canonical_db, backup_dir=backup_dir)
+    assert head_rev == HEAD_REVISION
+
+    from alembic import command
+
+    def _fail_if_called(*args, **kwargs):
+        raise AssertionError("alembic.command.upgrade must be skipped when DB is already at head")
+
+    monkeypatch.setattr(command, "upgrade", _fail_if_called)
+
+    second_rev = prepare_database_schema(canonical_db, backup_dir=backup_dir)
+    assert second_rev == HEAD_REVISION

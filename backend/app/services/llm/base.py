@@ -65,8 +65,43 @@ class ProviderShutdownResult:
     managed_by_core: bool = False
 
 
+@dataclass(frozen=True)
+class ResourceApplyOutcome:
+    """Outcome of non-blocking resource governance policy application on a provider."""
+
+    applied: bool
+    deferred_reason: Optional[str] = None
+    effective_profile: Optional[str] = None
+    degradation_reason: Optional[str] = None
+
+
 class BaseLLMProvider(ABC):
     """Contract for local and fallback LLM inference engines."""
+
+    @property
+    def has_active_generation(self) -> bool:
+        """True while a synchronous or streaming inference turn is actively executing."""
+        return False
+
+    async def apply_resource_policy(
+        self,
+        *,
+        low_impact_active: bool,
+        strategy: str,
+        lightweight_model_id: Optional[str] = None,
+    ) -> ResourceApplyOutcome:
+        """Apply runtime-only Low-Impact overrides non-blockingly without altering saved Normal prefs."""
+        return ResourceApplyOutcome(applied=True)
+
+    def get_resource_override_status(self) -> Dict[str, Any]:
+        """Return runtime-only resource override posture for status reporting."""
+        return {
+            "low_impact_active": False,
+            "strategy": "cpu_eco",
+            "lightweight_model_id": None,
+            "effective_profile": None,
+            "degradation_reason": None,
+        }
 
     @property
     @abstractmethod

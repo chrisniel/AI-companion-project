@@ -515,6 +515,42 @@ class CompanionClient {
     _handleErrorResponse(response);
   }
 
+  /// Queries live host resource governance & Auto Gaming status via GET /api/v1/system/resources.
+  Future<ResourcePolicyStatusOut> getResourcePolicy({
+    Duration timeout = const Duration(seconds: 10),
+  }) async {
+    final uri = baseUri.replace(path: '${baseUri.path}/api/v1/system/resources');
+    final response = await _adminRequest('GET', uri, timeout: timeout);
+    if (response.statusCode == 200) {
+      final dynamic json = jsonDecode(response.body);
+      return ResourcePolicyStatusOut.fromJson(
+        Map<String, dynamic>.from(json as Map),
+      );
+    }
+    _handleErrorResponse(response);
+  }
+
+  /// Updates host resource governance & Auto Gaming policy via PUT /api/v1/system/resources.
+  Future<ResourcePolicyStatusOut> updateResourcePolicy(
+    ResourcePolicyUpdateRequest request, {
+    Duration timeout = const Duration(seconds: 20),
+  }) async {
+    final uri = baseUri.replace(path: '${baseUri.path}/api/v1/system/resources');
+    final response = await _adminRequest(
+      'PUT',
+      uri,
+      body: jsonEncode(request.toJson()),
+      timeout: timeout,
+    );
+    if (response.statusCode == 200) {
+      final dynamic json = jsonDecode(response.body);
+      return ResourcePolicyStatusOut.fromJson(
+        Map<String, dynamic>.from(json as Map),
+      );
+    }
+    _handleErrorResponse(response);
+  }
+
   /// Manually scans IMPORT_INBOX_DIR for D6 GGUF model bundles via POST /api/v1/models/import/scan.
   Future<ModelImportScanOut> scanModelImportInbox({
     Duration timeout = const Duration(seconds: 30),

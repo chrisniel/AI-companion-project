@@ -4002,6 +4002,114 @@
         }
       }
     },
+    "/api/v1/system/resources": {
+      "get": {
+        "tags": [
+          "System Status"
+        ],
+        "summary": "Inspect Host Resource Governance & Auto Gaming Status (Host Admin)",
+        "description": "Return live host resource governance mode, gaming detection, and truthful OS capacity.",
+        "operationId": "get_system_resources_api_v1_system_resources_get",
+        "parameters": [
+          {
+            "name": "x-host-admin-secret",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Host-Admin-Secret"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourcePolicyStatusOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "System Status"
+        ],
+        "summary": "Update Host Resource Governance & Auto Gaming Policy (Host Admin)",
+        "description": "Persist validated resource governance settings and apply immediately without blocking.",
+        "operationId": "update_system_resources_api_v1_system_resources_put",
+        "parameters": [
+          {
+            "name": "x-host-admin-secret",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Host-Admin-Secret"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResourcePolicyUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourcePolicyStatusOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/verify": {
       "post": {
         "tags": [
@@ -10921,6 +11029,257 @@
         "type": "object",
         "title": "ReminderUpdate",
         "description": "Partial update payload for an existing reminder."
+      },
+      "ResourcePolicyStatusOut": {
+        "properties": {
+          "requested_mode": {
+            "type": "string",
+            "title": "Requested Mode",
+            "description": "Configured resource mode: normal, low_impact, or auto."
+          },
+          "effective_mode": {
+            "type": "string",
+            "title": "Effective Mode",
+            "description": "Currently active runtime mode: normal or low_impact."
+          },
+          "low_impact_active": {
+            "type": "boolean",
+            "title": "Low Impact Active",
+            "description": "True when Low-Impact governance overrides are active."
+          },
+          "low_impact_strategy": {
+            "type": "string",
+            "title": "Low Impact Strategy",
+            "description": "Low-Impact strategy: cpu_eco, unload_when_idle, or lightweight_model."
+          },
+          "low_impact_model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Low Impact Model Id",
+            "description": "Optional installed lightweight model override identifier."
+          },
+          "game_process_list": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Game Process List",
+            "description": "Validated .exe process basenames monitored in Auto Gaming Mode."
+          },
+          "detected_active_games": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Detected Active Games",
+            "description": "Monitored .exe basenames currently running on the host."
+          },
+          "cooldown_seconds": {
+            "type": "integer",
+            "title": "Cooldown Seconds",
+            "description": "Configured hysteresis cooldown duration in seconds after watched games close."
+          },
+          "cooldown_remaining_seconds": {
+            "type": "integer",
+            "title": "Cooldown Remaining Seconds",
+            "description": "Seconds remaining before exiting Auto Gaming Low-Impact cooldown."
+          },
+          "transition_state": {
+            "type": "string",
+            "title": "Transition State",
+            "description": "Policy application transition state: idle, applying, deferred_active_turn, or deferred_model_load."
+          },
+          "degradation_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Degradation Reason",
+            "description": "Explicit reason when lightweight_model fell back to cpu_eco."
+          },
+          "deferred_background_work": {
+            "type": "boolean",
+            "title": "Deferred Background Work",
+            "description": "True when non-explicit memory extraction and background routines are deferred."
+          },
+          "host_gpu_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Host Gpu Name",
+            "description": "Live detected host GPU adapter name, or null when unavailable."
+          },
+          "host_vram_gb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Host Vram Gb",
+            "description": "Live detected dedicated GPU VRAM in GiB, or null when unavailable."
+          },
+          "host_ram_gb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Host Ram Gb",
+            "description": "Live detected total physical RAM in GiB, or null when unavailable."
+          },
+          "available_ram_gb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Available Ram Gb",
+            "description": "Live detected available physical RAM in GiB, or null when unavailable."
+          },
+          "applied_profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied Profile",
+            "description": "Currently applied LLM hardware profile."
+          },
+          "requested_profile": {
+            "type": "string",
+            "title": "Requested Profile",
+            "description": "Saved Normal hardware profile preference."
+          },
+          "telemetry_source": {
+            "type": "string",
+            "title": "Telemetry Source",
+            "description": "Live hardware telemetry source identifier or 'unavailable'."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "requested_mode",
+          "effective_mode",
+          "low_impact_active",
+          "low_impact_strategy",
+          "game_process_list",
+          "detected_active_games",
+          "cooldown_seconds",
+          "cooldown_remaining_seconds",
+          "transition_state",
+          "deferred_background_work",
+          "requested_profile",
+          "telemetry_source"
+        ],
+        "title": "ResourcePolicyStatusOut",
+        "description": "Host resource governance and Auto Gaming Mode status telemetry (PC-RESOURCE-001..004)."
+      },
+      "ResourcePolicyUpdateRequest": {
+        "properties": {
+          "resource_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource Mode",
+            "description": "Target mode: normal, low_impact, or auto."
+          },
+          "low_impact_strategy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Low Impact Strategy",
+            "description": "Strategy: cpu_eco, unload_when_idle, or lightweight_model."
+          },
+          "low_impact_model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Low Impact Model Id",
+            "description": "Lightweight GGUF model identifier."
+          },
+          "clear_low_impact_model": {
+            "type": "boolean",
+            "title": "Clear Low Impact Model",
+            "description": "Clear any saved lightweight model override.",
+            "default": false
+          },
+          "game_process_list": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Game Process List",
+            "description": "Replacement .exe watchlist (max 64 unique basenames)."
+          },
+          "cooldown_seconds": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 300.0,
+                "minimum": 5.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cooldown Seconds",
+            "description": "Hysteresis cooldown duration (5..300s)."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ResourcePolicyUpdateRequest",
+        "description": "Host-Admin request to update resource governance and Gaming Mode policy."
       },
       "RoutineCreate": {
         "properties": {

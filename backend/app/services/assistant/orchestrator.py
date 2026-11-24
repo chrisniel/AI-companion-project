@@ -1268,6 +1268,16 @@ async def _run_post_turn_memory_extraction(
                     logger.debug(f"Memory extraction skipped: disabled for profile {profile_id}.")
                     return
 
+                is_explicit = is_explicit_intent(user_text)
+                from app.services.resource_governor import resource_governor
+
+                if resource_governor.should_defer_background_work and not is_explicit:
+                    logger.info(
+                        "Memory extraction deferred during Low-Impact mode for profile %s (non-explicit turn).",
+                        profile_id,
+                    )
+                    return
+
                 candidates = await extract_memory_candidates(
                     user_text=user_text,
                     assistant_text=assistant_text,
@@ -1278,7 +1288,6 @@ async def _run_post_turn_memory_extraction(
                     return
 
                 try:
-                    is_explicit = is_explicit_intent(user_text)
                     for candidate in candidates:
                         await reconcile_candidate(
                             db=extraction_db,

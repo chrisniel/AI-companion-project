@@ -153,6 +153,7 @@ class RuntimeAdmissionASGIMiddleware:
     NON_DB_GET_PATHS = {
         "/api/v1/system/storage",
         "/api/v1/system/autostart",
+        "/api/v1/system/resources",
     }
 
     def __init__(self, app) -> None:
@@ -262,48 +263,71 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Pairing credential initialized using selected local configuration.")
     logger.info("==================================================================")
 
-    # Step 4: Maintenance startup sweep, scheduler reconciliation & periodic background workers
+    # Step 4: Maintenance startup sweep, scheduler reconciliation, resource governor & periodic workers
+    # Run initial heavy DB sweeps right inside background tasks after `yield` so HTTP port 8000 opens immediately.
     periodic_task = None
     scheduler_task = None
+    resource_governor_task = None
     try:
+        from app.services.resource_governor import resource_governor, run_periodic_resource_governor
+
+        resource_governor_task = asyncio.create_task(run_periodic_resource_governor(resource_governor))
+
         from app.db.session import _session_factory
         if _session_factory is not None:
             from app.services.profile_purge_service import ProfilePurgeService, run_periodic_profile_purge
-            async with _session_factory() as session:
-                service = ProfilePurgeService(session)
-                sweep_res = await service.execute_maintenance_purge()
-                if sweep_res.purged_profile_ids:
-                    logger.info("Startup Profile purge maintenance: purged %d profiles", len(sweep_res.purged_profile_ids))
             interval = getattr(settings, "PROFILE_PURGE_INTERVAL_SECONDS", 3600)
-            periodic_task = asyncio.create_task(run_periodic_profile_purge(_session_factory, interval_seconds=interval))
+
+            async def _run_purge_with_startup_sweep() -> None:
+                try:
+                    async with _session_factory() as session:
+                        service = ProfilePurgeService(session)
+                        sweep_res = await service.execute_maintenance_purge()
+                        if sweep_res.purged_profile_ids:
+                            logger.info(
+                                "Startup Profile purge maintenance: purged %d profiles",
+                                len(sweep_res.purged_profile_ids),
+                            )
+                except asyncio.CancelledError:
+                    return
+                except Exception as exc:
+                    logger.warning("Startup Profile purge maintenance error: %s", exc)
+                await run_periodic_profile_purge(_session_factory, interval_seconds=interval)
+
+            periodic_task = asyncio.create_task(_run_purge_with_startup_sweep())
 
             if getattr(settings, "SCHEDULER_ENABLED", True):
                 from app.services.scheduler import SchedulerService, run_periodic_scheduler
-                async with _session_factory() as session:
-                    sched = SchedulerService(session)
-                    catchup_events = await sched.reconcile_missed_events()
-                    expired_swept = await sched.sweep_expired_memories()
-                    if catchup_events or expired_swept:
-                        logger.info(
-                            "Startup scheduler reconciliation: %d catch-up notifications, %d expired memories swept",
-                            len(catchup_events),
-                            expired_swept,
-                        )
                 sched_interval = getattr(settings, "SCHEDULER_POLL_INTERVAL_SECONDS", 2.0)
                 mem_sweep_interval = getattr(settings, "MEMORY_EXPIRATION_SWEEP_INTERVAL_SECONDS", 300.0)
-                scheduler_task = asyncio.create_task(
-                    run_periodic_scheduler(
+
+                async def _run_scheduler_with_startup_reconcile() -> None:
+                    try:
+                        async with _session_factory() as session:
+                            sched = SchedulerService(session)
+                            catchup_events = await sched.reconcile_missed_events()
+                            if catchup_events:
+                                logger.info(
+                                    "Startup scheduler reconciliation: %d catch-up notifications",
+                                    len(catchup_events),
+                                )
+                    except asyncio.CancelledError:
+                        return
+                    except Exception as exc:
+                        logger.warning("Startup scheduler reconciliation error: %s", exc)
+                    await run_periodic_scheduler(
                         _session_factory,
                         interval_seconds=sched_interval,
                         memory_sweep_interval_seconds=mem_sweep_interval,
                     )
-                )
+
+                scheduler_task = asyncio.create_task(_run_scheduler_with_startup_reconcile())
     except Exception as exc:
         logger.warning(f"Error initializing startup maintenance or scheduler: {exc}")
 
     yield
 
-    for bg_task in (scheduler_task, periodic_task):
+    for bg_task in (resource_governor_task, scheduler_task, periodic_task):
         if bg_task is not None:
             bg_task.cancel()
             try:

@@ -7,7 +7,12 @@ from typing import Any, AsyncGenerator, List, Optional, Union
 
 from app.core.config import settings
 from app.schemas.llm import ChatMessage, ModelStatusResponse
-from app.services.llm.base import BaseLLMProvider, GeneratedText, GenerationStream
+from app.services.llm.base import (
+    BaseLLMProvider,
+    GeneratedText,
+    GenerationStream,
+    ResourceApplyOutcome,
+)
 from app.services.llm.runtime_state import LLMRuntimeState
 from app.services.model_registry import (
     assess_context_options_for_entry,
@@ -52,17 +57,112 @@ class MockLLMProvider(BaseLLMProvider):
         self._last_active_at = datetime.now(timezone.utc)
         self._last_error: Optional[str] = None
         self.scripted_turns: List[Any] = []
+        self._lock = asyncio.Lock()
+        self._has_active_generation = False
+        self._resource_low_impact_active = False
+        self._resource_strategy = "cpu_eco"
+        self._resource_lightweight_model_id: Optional[str] = None
+        self._resource_degradation_reason: Optional[str] = None
+        self._applied_profile: Optional[str] = None
+
+    @property
+    def has_active_generation(self) -> bool:
+        return self._has_active_generation
+
+    def _effective_profile_name(self) -> str:
+        if self._resource_low_impact_active and (
+            self._resource_strategy == "cpu_eco"
+            or (self._resource_strategy == "lightweight_model" and self._resource_degradation_reason is not None)
+        ):
+            return "eco"
+        return self._active_profile
+
+    def _effective_model_name(self, explicit_model: Optional[str] = None) -> Optional[str]:
+        if explicit_model:
+            return explicit_model
+        if (
+            self._resource_low_impact_active
+            and self._resource_strategy == "lightweight_model"
+            and self._resource_degradation_reason is None
+            and self._resource_lightweight_model_id
+        ):
+            return self._resource_lightweight_model_id
+        return None
+
+    async def apply_resource_policy(
+        self,
+        *,
+        low_impact_active: bool,
+        strategy: str,
+        lightweight_model_id: Optional[str] = None,
+    ) -> ResourceApplyOutcome:
+        if self.has_active_generation:
+            return ResourceApplyOutcome(applied=False, deferred_reason="deferred_active_turn")
+        if self._lock.locked():
+            return ResourceApplyOutcome(applied=False, deferred_reason="deferred_model_load")
+
+        async with self._lock:
+            was_active = self._resource_low_impact_active
+            prev_strategy = self._resource_strategy
+            prev_model = self._resource_lightweight_model_id
+
+            degradation_reason: Optional[str] = None
+            resolved_model_id: Optional[str] = None
+            if low_impact_active and strategy == "lightweight_model":
+                if not lightweight_model_id:
+                    degradation_reason = "lightweight_model_missing"
+                else:
+                    entry = find_model_registry_entry(lightweight_model_id)
+                    if entry is None or not entry.library_state.primary_file_exists:
+                        degradation_reason = "lightweight_model_unavailable"
+                    else:
+                        resolved_model_id = entry.runtime_model_id or entry.manifest.id
+
+            self._resource_low_impact_active = bool(low_impact_active)
+            self._resource_strategy = strategy
+            self._resource_lightweight_model_id = resolved_model_id or lightweight_model_id
+            self._resource_degradation_reason = degradation_reason
+
+            if low_impact_active:
+                if not was_active or prev_strategy != strategy or prev_model != self._resource_lightweight_model_id:
+                    if self._is_loaded:
+                        await self.unload_model()
+                elif strategy == "unload_when_idle" and self._is_loaded:
+                    idle_elapsed = (datetime.now(timezone.utc) - self._last_active_at).total_seconds()
+                    if idle_elapsed >= settings.RESOURCE_LOW_IMPACT_IDLE_SECONDS:
+                        await self.unload_model()
+            elif was_active and self._is_loaded:
+                # Lazy exit: free overridden lightweight/eco session; never eagerly reload heavy model.
+                await self.unload_model()
+
+            eff_profile = self._effective_profile_name()
+            return ResourceApplyOutcome(
+                applied=True,
+                effective_profile=eff_profile,
+                degradation_reason=degradation_reason,
+            )
+
+    def get_resource_override_status(self) -> dict[str, Any]:
+        return {
+            "low_impact_active": self._resource_low_impact_active,
+            "strategy": self._resource_strategy,
+            "lightweight_model_id": self._resource_lightweight_model_id,
+            "effective_profile": self._effective_profile_name(),
+            "degradation_reason": self._resource_degradation_reason,
+        }
 
     @property
     def provider_name(self) -> str:
         return "mock"
 
     async def load_model(self, model_name: Optional[str] = None, profile: Optional[str] = None) -> bool:
-        if self._is_loaded and model_name is None:
+        eff_profile = profile or self._effective_profile_name()
+        eff_target_hint = self._effective_model_name(model_name)
+        if self._is_loaded and model_name is None and (eff_target_hint is None or eff_target_hint == self._active_model) and self._applied_profile == eff_profile:
             self._last_active_at = datetime.now(timezone.utc)
             return True
 
-        target, source = resolve_effective_model(model_name)
+        target, source = resolve_effective_model(eff_target_hint)
         if not target and self._default_mock_model:
             target = self._default_mock_model
             source = "mock_configuration"
@@ -76,6 +176,7 @@ class MockLLMProvider(BaseLLMProvider):
         self._active_model = target
         if profile:
             self._active_profile = profile
+        self._applied_profile = self._effective_profile_name()
         self._is_loaded = True
         self._last_error = None
         self._last_active_at = datetime.now(timezone.utc)
@@ -84,6 +185,7 @@ class MockLLMProvider(BaseLLMProvider):
     async def unload_model(self) -> bool:
         self._is_loaded = False
         self._active_model = None
+        self._applied_profile = None
         return True
 
     async def set_profile(
@@ -134,13 +236,14 @@ class MockLLMProvider(BaseLLMProvider):
             else None
         )
         is_loaded = self._is_loaded
+        eff_profile = self._effective_profile_name()
         applied_ctx = resolve_context_size_for_mode(
-            context_sizes.get(self._active_profile, 4096),
+            context_sizes.get(eff_profile, 4096),
             self._context_mode,
             model_max_context=entry_max_ctx,
         )
-        applied_ngl = gpu_layers.get(self._active_profile, settings.LLM_GPU_LAYERS)
-        is_eco = self._active_profile == "eco"
+        applied_ngl = gpu_layers.get(eff_profile, settings.LLM_GPU_LAYERS)
+        is_eco = eff_profile == "eco"
         mmproj_flag = not is_eco
         hw = probe_host_hardware()
         context_options = assess_context_options_for_entry(
@@ -175,7 +278,7 @@ class MockLLMProvider(BaseLLMProvider):
             requested_profile=self._active_profile,
             requested_context_mode=self._context_mode,
             context_options=context_options,
-            applied_profile=self._active_profile,
+            applied_profile=eff_profile,
             applied_context_size=applied_ctx,
             applied_gpu_layers=applied_ngl,
             requested_mmproj_offload=mmproj_flag,

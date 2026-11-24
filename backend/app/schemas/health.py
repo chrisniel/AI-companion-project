@@ -107,3 +107,38 @@ class AutostartUpdateRequest(BaseSchema):
         default=True,
         description="Launch minimized to system tray without initial window flash.",
     )
+
+
+class ResourcePolicyStatusOut(BaseSchema):
+    """Host resource governance and Auto Gaming Mode status telemetry (PC-RESOURCE-001..004)."""
+
+    requested_mode: str = Field(..., description="Configured resource mode: normal, low_impact, or auto.")
+    effective_mode: str = Field(..., description="Currently active runtime mode: normal or low_impact.")
+    low_impact_active: bool = Field(..., description="True when Low-Impact governance overrides are active.")
+    low_impact_strategy: str = Field(..., description="Low-Impact strategy: cpu_eco, unload_when_idle, or lightweight_model.")
+    low_impact_model_id: Optional[str] = Field(default=None, description="Optional installed lightweight model override identifier.")
+    game_process_list: List[str] = Field(..., description="Validated .exe process basenames monitored in Auto Gaming Mode.")
+    detected_active_games: List[str] = Field(..., description="Monitored .exe basenames currently running on the host.")
+    cooldown_seconds: int = Field(..., description="Configured hysteresis cooldown duration in seconds after watched games close.")
+    cooldown_remaining_seconds: int = Field(..., description="Seconds remaining before exiting Auto Gaming Low-Impact cooldown.")
+    transition_state: str = Field(..., description="Policy application transition state: idle, applying, deferred_active_turn, or deferred_model_load.")
+    degradation_reason: Optional[str] = Field(default=None, description="Explicit reason when lightweight_model fell back to cpu_eco.")
+    deferred_background_work: bool = Field(..., description="True when non-explicit memory extraction and background routines are deferred.")
+    host_gpu_name: Optional[str] = Field(default=None, description="Live detected host GPU adapter name, or null when unavailable.")
+    host_vram_gb: Optional[float] = Field(default=None, description="Live detected dedicated GPU VRAM in GiB, or null when unavailable.")
+    host_ram_gb: Optional[float] = Field(default=None, description="Live detected total physical RAM in GiB, or null when unavailable.")
+    available_ram_gb: Optional[float] = Field(default=None, description="Live detected available physical RAM in GiB, or null when unavailable.")
+    applied_profile: Optional[str] = Field(default=None, description="Currently applied LLM hardware profile.")
+    requested_profile: str = Field(..., description="Saved Normal hardware profile preference.")
+    telemetry_source: str = Field(..., description="Live hardware telemetry source identifier or 'unavailable'.")
+
+
+class ResourcePolicyUpdateRequest(BaseSchema):
+    """Host-Admin request to update resource governance and Gaming Mode policy."""
+
+    resource_mode: Optional[str] = Field(default=None, description="Target mode: normal, low_impact, or auto.")
+    low_impact_strategy: Optional[str] = Field(default=None, description="Strategy: cpu_eco, unload_when_idle, or lightweight_model.")
+    low_impact_model_id: Optional[str] = Field(default=None, description="Lightweight GGUF model identifier.")
+    clear_low_impact_model: bool = Field(default=False, description="Clear any saved lightweight model override.")
+    game_process_list: Optional[List[str]] = Field(default=None, description="Replacement .exe watchlist (max 64 unique basenames).")
+    cooldown_seconds: Optional[int] = Field(default=None, ge=5, le=300, description="Hysteresis cooldown duration (5..300s).")

@@ -5,6 +5,7 @@ from array import array
 import asyncio
 import base64
 from dataclasses import dataclass
+from datetime import datetime
 import io
 import json
 import math
@@ -288,6 +289,40 @@ def preprocess_text_for_tts(text: str) -> str:
     cleaned = _MD_LINK_RE.sub(r"\1", cleaned)
     cleaned = _URL_RE.sub("", cleaned)
     cleaned = cleaned.replace("```", " ").replace("`", "")
+    cleaned = re.sub(r"[*_~]+", "", cleaned)
+
+    def _format_iso_datetime(m: re.Match[str]) -> str:
+        try:
+            dt = datetime(
+                int(m.group(1)),
+                int(m.group(2)),
+                int(m.group(3)),
+                int(m.group(4)),
+                int(m.group(5)),
+            )
+        except ValueError:
+            return m.group(0)
+        hour_12 = dt.hour % 12 or 12
+        am_pm = "AM" if dt.hour < 12 else "PM"
+        return f"{dt.strftime('%B')} {dt.day}, {dt.year} at {hour_12}:{dt.minute:02d} {am_pm}"
+
+    def _format_iso_date(m: re.Match[str]) -> str:
+        try:
+            dt = datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            return m.group(0)
+        return f"{dt.strftime('%B')} {dt.day}, {dt.year}"
+
+    cleaned = re.sub(
+        r"\b(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?\b",
+        _format_iso_datetime,
+        cleaned,
+    )
+    cleaned = re.sub(
+        r"\b(\d{4})-(\d{2})-(\d{2})\b",
+        _format_iso_date,
+        cleaned,
+    )
 
     def _unit_name(unit: str) -> str:
         return "degrees Celsius" if unit.lower() == "c" else "degrees Fahrenheit"

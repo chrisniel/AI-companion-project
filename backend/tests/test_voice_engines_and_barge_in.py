@@ -356,7 +356,13 @@ def test_tts_espeak_g2p_taglish_and_preprocessing():
 
     date_and_range = preprocess_text_for_tts("November 22-30 vs 2026-11-21")
     assert "November 22 to 30" in date_and_range
-    assert "2026-11-21" in date_and_range
+    assert "November 21, 2026" in date_and_range
+    assert "2026-11-21" not in date_and_range
+
+    iso_dt = preprocess_text_for_tts("Scheduled **Wedding prep**—starting 2026-12-08T14:30:00+08:00.")
+    assert "**" not in iso_dt
+    assert "2026-12-08" not in iso_dt
+    assert "December 8, 2026 at 2:30 PM" in iso_dt
 
     em_dash = preprocess_text_for_tts("But wait—your friend’s wedding is on December 8th—really!")
     assert "—" not in em_dash

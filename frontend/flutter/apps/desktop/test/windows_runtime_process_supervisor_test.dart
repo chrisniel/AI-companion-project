@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:ai_companion_desktop/platform/desktop_process_inspector.dart';
 import 'package:ai_companion_desktop/platform/process_launcher_adapter.dart';
 import 'package:ai_companion_desktop/platform/windows_runtime_process_supervisor.dart';
 import 'package:companion_core/companion_core.dart';
@@ -75,6 +76,30 @@ class FakeProcessLauncher implements ProcessLauncherAdapter {
   @override
   Future<bool> killPid(int pid, [ProcessSignal signal = ProcessSignal.sigterm]) async {
     throw UnimplementedError('Arbitrary killPid must not be called during inspection timeout');
+  }
+}
+
+class _FakeProcessInspector implements DesktopProcessInspector {
+  bool? aliveResult;
+  NativeProcessDiscoveryBatch? batchResult;
+  int aliveCalls = 0;
+  int discoverCalls = 0;
+
+  @override
+  Future<bool?> isProcessAliveAndMatching({
+    required int pid,
+    required String expectedExecutable,
+  }) async {
+    aliveCalls++;
+    return aliveResult;
+  }
+
+  @override
+  Future<NativeProcessDiscoveryBatch?> discoverCandidateProcesses({
+    required String targetExecutableBase,
+  }) async {
+    discoverCalls++;
+    return batchResult;
   }
 }
 
@@ -703,6 +728,107 @@ void main() {
       // Check command arguments passed to launcher contain managedByCore = $false
       final scriptArg = fakeLauncher.startedArgs?.last ?? '';
       expect(scriptArg, contains(r'$managedByCore = $false'));
+    });
+
+    test('native DesktopProcessInspector fast-path avoids spawning tasklist or powershell', () async {
+      final fakeLauncher = FakeProcessLauncher();
+      final fakeInspector = _FakeProcessInspector()
+        ..aliveResult = true
+        ..batchResult = const NativeProcessDiscoveryBatch(
+          needsFallback: false,
+          candidates: [
+            RawDiscoveredProcessCandidate(
+              pid: 4321,
+              executablePath: r'C:\test\pythonw.exe',
+              commandLine: r'C:\test\pythonw.exe -m app.runtime_server app.main:app --port 8000',
+              creationDate: '2026-11-24T10:00:00.000Z',
+            ),
+          ],
+        );
+
+      final supervisor = WindowsRuntimeProcessSupervisor(
+        launcher: fakeLauncher,
+        processInspector: fakeInspector,
+      );
+
+      final isActive = await supervisor.isProcessActiveAndMatching(
+        4321,
+        expectedExecutable: r'C:\test\python.exe',
+      );
+      expect(isActive, isTrue);
+      expect(fakeInspector.aliveCalls, equals(1));
+      expect(fakeLauncher.startedCommand, isNull);
+
+      final discovery = await supervisor.discoverRuntimeProcesses(
+        port: 8000,
+        expectedExecutable: r'C:\test\python.exe',
+      );
+      expect(discovery.status, equals(ProcessDiscoveryStatus.verified));
+      expect(discovery.verifiedProcess?.pid, equals(4321));
+      expect(fakeInspector.discoverCalls, equals(1));
+      expect(fakeLauncher.startedCommand, isNull);
+    });
+
+    test('discoverRuntimeProcesses falls back to PowerShell when native inspector sets needsFallback', () async {
+      final fakeLauncher = FakeProcessLauncher()
+        ..runResult = ProcessResult(1, 0, '"python.exe","4321","Console","1","10,000 K"', '')
+        ..processToStart = FakeProcess(
+          stdout: Stream.value(utf8.encode(jsonEncode({
+            'ProcessId': 4321,
+            'ExecutablePath': r'C:\test\python.exe',
+            'CommandLine': r'C:\test\python.exe -m uvicorn app.main:app --port 8000',
+            'CreationDate': '2026-11-24T10:00:00.000Z',
+          }))),
+          exitCode: Future.value(0),
+        );
+      final fakeInspector = _FakeProcessInspector()
+        ..aliveResult = null
+        ..batchResult = const NativeProcessDiscoveryBatch(needsFallback: true);
+
+      final supervisor = WindowsRuntimeProcessSupervisor(
+        launcher: fakeLauncher,
+        processInspector: fakeInspector,
+      );
+
+      expect(
+        await supervisor.isProcessActiveAndMatching(
+          4321,
+          expectedExecutable: r'C:\test\python.exe',
+        ),
+        isTrue,
+      );
+      final discovery = await supervisor.discoverRuntimeProcesses(
+        port: 8000,
+        expectedExecutable: r'C:\test\python.exe',
+      );
+      expect(discovery.status, equals(ProcessDiscoveryStatus.verified));
+      expect(fakeLauncher.startedCommand, equals('powershell'));
+    });
+
+    test('native inspector preserves fail-closed multi-candidate and provenance checks', () async {
+      final fakeInspector = _FakeProcessInspector()
+        ..batchResult = const NativeProcessDiscoveryBatch(
+          needsFallback: false,
+          candidates: [
+            RawDiscoveredProcessCandidate(
+              pid: 4321,
+              executablePath: r'C:\other_env\python.exe',
+              commandLine: r'C:\other_env\python.exe -m app.runtime_server app.main:app --port 8000',
+              creationDate: '2026-11-24T10:00:00.000Z',
+            ),
+          ],
+        );
+
+      final supervisor = WindowsRuntimeProcessSupervisor(
+        launcher: FakeProcessLauncher(),
+        processInspector: fakeInspector,
+      );
+
+      final result = await supervisor.discoverRuntimeProcesses(
+        port: 8000,
+        expectedExecutable: r'C:\test\python.exe',
+      );
+      expect(result.status, equals(ProcessDiscoveryStatus.unverifiedCandidate));
     });
   });
 }

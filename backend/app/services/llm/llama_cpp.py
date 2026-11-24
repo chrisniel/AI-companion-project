@@ -35,6 +35,7 @@ from app.services.llm.base import (
     GeneratedText,
     GenerationStream,
     ProviderShutdownResult,
+    ResourceApplyOutcome,
 )
 from app.services.llm.runtime_state import LLMRuntimeState
 from app.services.model_registry import (
@@ -250,6 +251,145 @@ class LlamaCppProvider(BaseLLMProvider):
         self._active_router_clients: set[httpx.AsyncClient] = set()
         self._shutdown_drain_timeout = 120.0
         self._custom_engine_version: Optional[str] = None
+        self._resource_low_impact_active: bool = False
+        self._resource_strategy: str = "cpu_eco"
+        self._resource_lightweight_model_id: Optional[str] = None
+        self._resource_resolved_lightweight_id: Optional[str] = None
+        self._resource_degradation_reason: Optional[str] = None
+        self._resource_using_temporary_model: bool = False
+
+    def _effective_strategy(self) -> str:
+        if not self._resource_low_impact_active:
+            return "normal"
+        if self._resource_strategy == "lightweight_model" and self._resource_degradation_reason is not None:
+            return "cpu_eco"
+        return self._resource_strategy
+
+    def _effective_profile_name(self) -> str:
+        if self._resource_low_impact_active and self._effective_strategy() == "cpu_eco":
+            return "eco"
+        return self._active_profile
+
+    def _effective_model_name(self, explicit_model: Optional[str] = None) -> Optional[str]:
+        if explicit_model:
+            return explicit_model
+        if (
+            self._resource_low_impact_active
+            and self._effective_strategy() == "lightweight_model"
+            and self._resource_resolved_lightweight_id
+        ):
+            return self._resource_resolved_lightweight_id
+        return None
+
+    def get_resource_override_status(self) -> dict[str, Any]:
+        return {
+            "low_impact_active": self._resource_low_impact_active,
+            "strategy": self._resource_strategy,
+            "lightweight_model_id": self._resource_lightweight_model_id,
+            "effective_profile": self._effective_profile_name(),
+            "degradation_reason": self._resource_degradation_reason,
+        }
+
+    async def apply_resource_policy(
+        self,
+        *,
+        low_impact_active: bool,
+        strategy: str,
+        lightweight_model_id: Optional[str] = None,
+    ) -> ResourceApplyOutcome:
+        if self._closing or self._shutdown_event.is_set():
+            return ResourceApplyOutcome(applied=False, deferred_reason="provider_shutting_down")
+        if self.has_active_generation:
+            return ResourceApplyOutcome(applied=False, deferred_reason="deferred_active_turn")
+        if self._lock.locked() or self._runtime_state in (
+            LLMRuntimeState.SERVER_STARTING,
+            LLMRuntimeState.MODEL_LOADING,
+            LLMRuntimeState.MODEL_UNLOADING,
+        ):
+            return ResourceApplyOutcome(applied=False, deferred_reason="deferred_model_load")
+
+        async with self._lock:
+            if self._closing or self._shutdown_event.is_set():
+                return ResourceApplyOutcome(applied=False, deferred_reason="provider_shutting_down")
+            if self.has_active_generation:
+                return ResourceApplyOutcome(applied=False, deferred_reason="deferred_active_turn")
+
+            was_active = self._resource_low_impact_active
+            prev_strategy = self._resource_strategy
+            prev_resolved_model = self._resource_resolved_lightweight_id
+
+            degradation_reason: Optional[str] = None
+            resolved_lightweight: Optional[str] = None
+            if low_impact_active and strategy == "lightweight_model":
+                if not lightweight_model_id:
+                    degradation_reason = "lightweight_model_missing"
+                else:
+                    entry = find_model_registry_entry(lightweight_model_id)
+                    if entry is None or not entry.library_state.primary_file_exists:
+                        degradation_reason = "lightweight_model_unavailable"
+                    else:
+                        resolved_lightweight = entry.runtime_model_id or entry.manifest.id
+
+            self._resource_low_impact_active = bool(low_impact_active)
+            self._resource_strategy = strategy
+            self._resource_lightweight_model_id = lightweight_model_id
+            self._resource_resolved_lightweight_id = resolved_lightweight
+            self._resource_degradation_reason = degradation_reason
+
+            eff_strategy = self._effective_strategy()
+            eff_profile = self._effective_profile_name()
+            eff_model = self._effective_model_name()
+
+            router_alive = (
+                self._managed_by_core
+                and self._server_process is not None
+                and self._server_process.poll() is None
+            )
+
+            if low_impact_active:
+                policy_changed = (
+                    not was_active
+                    or prev_strategy != strategy
+                    or prev_resolved_model != resolved_lightweight
+                )
+                if eff_strategy == "unload_when_idle":
+                    if not was_active and self.is_loaded():
+                        await self._unload_model_locked()
+                    elif self.is_loaded() and self._last_active_at is not None:
+                        idle_elapsed = (datetime.now(timezone.utc) - self._last_active_at).total_seconds()
+                        if idle_elapsed >= settings.RESOURCE_LOW_IMPACT_IDLE_SECONDS:
+                            await self._unload_model_locked()
+                else:
+                    need_model_reset = self.is_loaded() and (
+                        policy_changed
+                        or (eff_model is not None and eff_model != self._active_model_name)
+                        or (router_alive and self._applied_profile != eff_profile)
+                    )
+                    if need_model_reset:
+                        await self._unload_model_locked()
+                    if router_alive and not self.is_loaded() and (
+                        self._applied_profile != eff_profile or eff_strategy == "lightweight_model"
+                    ):
+                        await self._stop_idle_managed_router_locked()
+            elif was_active:
+                # Exiting Low-Impact -> Normal: never eagerly reload heavy models.
+                # Unload temporary/overridden session and stop overridden eco router.
+                if self.is_loaded() and (
+                    self._resource_using_temporary_model
+                    or (self._applied_profile is not None and self._applied_profile != self._active_profile)
+                ):
+                    await self._unload_model_locked()
+                if router_alive and not self.is_loaded() and (
+                    self._applied_profile != self._active_profile or self._resource_using_temporary_model
+                ):
+                    await self._stop_idle_managed_router_locked()
+                self._resource_using_temporary_model = False
+
+            return ResourceApplyOutcome(
+                applied=True,
+                effective_profile=eff_profile,
+                degradation_reason=degradation_reason,
+            )
 
     @property
     def active_generation_count(self) -> int:
@@ -619,34 +759,43 @@ class LlamaCppProvider(BaseLLMProvider):
                             self._last_error = "MODEL_PATH_TRAVERSAL"
                             return False
 
-                    # Active model reuse (Master Plan / Review requirements):
-                    # If server/model is already loaded (ready or sleeping) and no model is specified
-                    # or the requested model matches the currently active model, reuse without reload or unload.
-                    if self.is_loaded():
-                        if model_name is None:
-                            logger.info(f"Reusing active model '{self._active_model_name}' without reload")
-                            self._last_active_at = datetime.now(timezone.utc)
-                            return True
+                    eff_profile = self._effective_profile_name()
+                    eff_model_override = self._effective_model_name(explicit_model=model_name)
 
-                        matched_active = find_model_registry_entry(model_name)
-                        req_runtime_id = (
-                            (matched_active.runtime_model_id or matched_active.manifest.id)
-                            if matched_active
-                            else resolve_runtime_model_id(model_name)
-                        )
-                        if req_runtime_id and req_runtime_id == self._active_model_name:
-                            logger.info(
-                                f"Requested model '{model_name}' matches active model '{self._active_model_name}'; reusing without reload"
+                    # Active model reuse (Master Plan / Review requirements):
+                    # Reuse only when model and effective hardware profile match.
+                    if self.is_loaded():
+                        if model_name is None and eff_model_override is None:
+                            if not self._managed_by_core or self._applied_profile in (None, eff_profile):
+                                logger.info(f"Reusing active model '{self._active_model_name}' without reload")
+                                self._last_active_at = datetime.now(timezone.utc)
+                                return True
+
+                        reuse_probe = eff_model_override or model_name
+                        if reuse_probe:
+                            matched_active = find_model_registry_entry(reuse_probe)
+                            req_runtime_id = (
+                                (matched_active.runtime_model_id or matched_active.manifest.id)
+                                if matched_active
+                                else resolve_runtime_model_id(reuse_probe)
                             )
-                            self._last_active_at = datetime.now(timezone.utc)
-                            return True
+                            if (
+                                req_runtime_id
+                                and req_runtime_id == self._active_model_name
+                                and (not self._managed_by_core or self._applied_profile in (None, eff_profile))
+                            ):
+                                logger.info(
+                                    f"Requested model '{reuse_probe}' matches active model '{self._active_model_name}'; reusing without reload"
+                                )
+                                self._last_active_at = datetime.now(timezone.utc)
+                                return True
 
                     # Resolve target model according to precedence:
-                    # 1. Explicitly requested model for the operation
+                    # 1. Explicitly requested model or temporary lightweight override
                     # 2. Saved host-level model selection
                     # 3. Explicit development environment override, if present
                     # 4. Otherwise MODEL_SELECTION_REQUIRED
-                    candidate_identifier, source = resolve_effective_model(model_name)
+                    candidate_identifier, source = resolve_effective_model(eff_model_override)
                     if not candidate_identifier:
                         self._last_error = "MODEL_SELECTION_REQUIRED"
                         self._runtime_state = LLMRuntimeState.MODEL_SELECTION_REQUIRED
@@ -663,12 +812,14 @@ class LlamaCppProvider(BaseLLMProvider):
                     target_model_name = registry_entry.runtime_model_id or registry_entry.manifest.id
                     target_models_dir = self._models_dir_for_entry(registry_entry)
 
-                    # Mode 0: If Core-managed process is already alive, check root parity before reusing it
+                    # Mode 0: If Core-managed process is already alive, check root and effective profile parity before reusing it
                     if self._server_process is not None and self._server_process.poll() is None:
                         need_root_restart = (
                             self._managed_by_core
-                            and self._active_models_dir is not None
-                            and str(self._active_models_dir) != str(target_models_dir.resolve())
+                            and (
+                                (self._active_models_dir is not None and str(self._active_models_dir) != str(target_models_dir.resolve()))
+                                or (self._applied_profile is not None and self._applied_profile != eff_profile)
+                            )
                         )
                         if need_root_restart:
                             logger.info(
@@ -763,7 +914,7 @@ class LlamaCppProvider(BaseLLMProvider):
                     raw_max_ctx = getattr(manifest_obj, "model_max_context", None) if manifest_obj is not None else None
                     model_max_ctx = raw_max_ctx if isinstance(raw_max_ctx, int) and not isinstance(raw_max_ctx, bool) else None
                     params = self._get_profile_params(
-                        self._active_profile,
+                        eff_profile,
                         model_max_context=model_max_ctx,
                     )
                     logger.info(
@@ -820,7 +971,12 @@ class LlamaCppProvider(BaseLLMProvider):
                         self._active_models_dir = resolved_models_root
                         self._server_launch_args = launch_args
                         self._server_started_at = datetime.now(timezone.utc)
-                        self._applied_profile = self._active_profile
+                        self._applied_profile = eff_profile
+                        self._resource_using_temporary_model = bool(
+                            self._resource_low_impact_active
+                            and self._effective_strategy() == "lightweight_model"
+                            and model_name is None
+                        )
                         self._applied_context_size = params["n_ctx"]
                         self._applied_gpu_layers = params["n_gpu_layers"]
                         self._applied_mmproj_offload = params.get("mmproj_offload", True)
@@ -919,48 +1075,75 @@ class LlamaCppProvider(BaseLLMProvider):
             if self._active_load_task is curr_task:
                 self._active_load_task = None
 
+    async def _stop_idle_managed_router_locked(self) -> bool:
+        """Stop an idle Core-managed router process while holding self._lock."""
+        if not (self._managed_by_core and self._server_process and self._server_process.poll() is None):
+            return True
+        stopped = self._stop_managed_router_locked()
+        if not stopped:
+            return False
+        if self._server_client:
+            await self._server_client.aclose()
+            self._server_client = None
+        self._server_is_active = False
+        self._active_model_name = None
+        self._active_models_dir = None
+        self._applied_profile = None
+        self._applied_context_size = None
+        self._applied_gpu_layers = None
+        self._applied_mmproj_offload = None
+        self._runtime_state = LLMRuntimeState.SERVER_STOPPED
+        return True
+
+    async def _unload_model_locked(self) -> bool:
+        """Unload model resources while caller already holds self._lock."""
+        if self.has_active_generation:
+            self._last_error = "MODEL_BUSY: active generation"
+            return False
+
+        if self._idle_check_task and not self._idle_check_task.done():
+            self._idle_check_task.cancel()
+
+        # 1. Free in-process model
+        if self._llm is not None:
+            logger.info(f"Unloading in-process model '{self._active_model_name}' to free VRAM...")
+            del self._llm
+            self._llm = None
+            gc.collect()
+
+        # 2. Preferred: router API — router stays alive (runtime arch §5 Explicit Unload)
+        if self._active_model_name and self._server_is_active:
+            self._runtime_state = LLMRuntimeState.MODEL_UNLOADING
+            runtime_id = resolve_runtime_model_id(self._active_model_name)
+            if await self._router_unload_model(runtime_id):
+                self._runtime_state = LLMRuntimeState.MODEL_UNLOADED
+                self._active_model_name = None
+                self._resource_using_temporary_model = False
+                logger.info("Model unloaded via router API; router alive")
+                return True
+            logger.warning("Router API unload failed; escalating to scoped PID termination")
+
+        # 3. Fallback: scoped PID termination — runtime arch §5 invariant: NEVER taskkill /IM
+        if self._managed_by_core and self._server_process:
+            stopped = self._stop_managed_router_locked()
+            if not stopped:
+                logger.error(f"Failed to terminate router PID={self._server_pid} during unload fallback; retaining ownership")
+                return False
+            if self._server_client:
+                await self._server_client.aclose()
+                self._server_client = None
+            self._resource_using_temporary_model = False
+            logger.info("Model unloaded successfully. Scoped termination complete.")
+            return True
+
+        self._runtime_state = LLMRuntimeState.MODEL_UNLOADED
+        self._active_model_name = None
+        self._resource_using_temporary_model = False
+        return True
+
     async def unload_model(self) -> bool:
         async with self._lock:
-            if self.has_active_generation:
-                self._last_error = "MODEL_BUSY: active generation"
-                return False
-
-            if self._idle_check_task and not self._idle_check_task.done():
-                self._idle_check_task.cancel()
-
-            # 1. Free in-process model
-            if self._llm is not None:
-                logger.info(f"Unloading in-process model '{self._active_model_name}' to free VRAM...")
-                del self._llm
-                self._llm = None
-                gc.collect()
-
-            # 2. Preferred: router API — router stays alive (runtime arch §5 Explicit Unload)
-            if self._active_model_name and self._server_is_active:
-                self._runtime_state = LLMRuntimeState.MODEL_UNLOADING
-                runtime_id = resolve_runtime_model_id(self._active_model_name)
-                if await self._router_unload_model(runtime_id):
-                    self._runtime_state = LLMRuntimeState.MODEL_UNLOADED
-                    self._active_model_name = None
-                    logger.info("Model unloaded via router API; router alive")
-                    return True
-                logger.warning("Router API unload failed; escalating to scoped PID termination")
-
-            # 3. Fallback: scoped PID termination — runtime arch §5 invariant: NEVER taskkill /IM
-            if self._managed_by_core and self._server_process:
-                stopped = self._stop_managed_router_locked()
-                if not stopped:
-                    logger.error(f"Failed to terminate router PID={self._server_pid} during unload fallback; retaining ownership")
-                    return False
-                if self._server_client:
-                    await self._server_client.aclose()
-                    self._server_client = None
-                logger.info("Model unloaded successfully. Scoped termination complete.")
-                return True
-
-            self._runtime_state = LLMRuntimeState.MODEL_UNLOADED
-            self._active_model_name = None
-            return True
+            return await self._unload_model_locked()
 
     async def set_profile(
         self,
@@ -981,21 +1164,22 @@ class LlamaCppProvider(BaseLLMProvider):
                 logger.warning(f"Cannot change profile to '{p}' while generation is active")
                 return False
 
-            old_profile = self._active_profile
+            old_eff_profile = self._effective_profile_name()
             old_ctx_mode = self._context_mode
             self._active_profile = p
             self._context_mode = next_ctx_mode
             save_hardware_profile(p)
             if context_mode is not None:
                 save_context_mode(next_ctx_mode)
+            new_eff_profile = self._effective_profile_name()
             logger.info(
-                f"LLM hardware profile set from '{old_profile}' (ctx={old_ctx_mode}) to '{p}' (ctx={next_ctx_mode})"
+                f"LLM hardware profile saved as '{p}' (ctx={next_ctx_mode}; active effective={new_eff_profile})"
             )
 
             # Evidence-gated profile reconfiguration:
-            # If a Core-managed router process is running, terminate it cleanly so
-            # that subsequent activations use the newly requested profile launch args.
-            if (old_profile != p or old_ctx_mode != next_ctx_mode) and self._managed_by_core and self._server_process and self._server_process.poll() is None:
+            # Restart Core-managed router only if effective profile/context actually changed
+            # (preserves active Low-Impact cpu_eco override while updating saved Normal preference).
+            if (old_eff_profile != new_eff_profile or old_ctx_mode != next_ctx_mode) and self._managed_by_core and self._server_process and self._server_process.poll() is None:
                 logger.info(f"Terminating Core-managed router PID={self._server_pid} to apply profile '{p}' on next activation")
                 if self._active_model_name and self._server_is_active:
                     try:
@@ -1055,24 +1239,42 @@ class LlamaCppProvider(BaseLLMProvider):
 
     async def _idle_monitor_loop(self) -> None:
         """Periodic background monitor checking for idle timeout auto-unload."""
-        # When router is active with native --sleep-idle-seconds > 0, llama-server handles
-        # memory sleep natively without Python fighting or racing it.
-        if self._server_is_active and settings.LLAMA_ROUTER_IDLE_TIMEOUT > 0:
-            logger.info("Native --sleep-idle-seconds is active on router; Python auto-unload monitor neutralized.")
-            return
-
         while self.is_loaded():
-            await asyncio.sleep(30)
+            unload_when_idle_active = (
+                self._resource_low_impact_active
+                and self._effective_strategy() == "unload_when_idle"
+            )
+            if self._server_is_active and settings.LLAMA_ROUTER_IDLE_TIMEOUT > 0 and not unload_when_idle_active:
+                logger.info("Native --sleep-idle-seconds is active on router; Python auto-unload monitor neutralized.")
+                return
+
+            sleep_seconds = (
+                min(30.0, float(settings.RESOURCE_LOW_IMPACT_IDLE_SECONDS))
+                if unload_when_idle_active
+                else 30.0
+            )
+            await asyncio.sleep(max(0.1, sleep_seconds))
             if not self.is_loaded():
                 break
 
-            if self._server_is_active and settings.LLAMA_ROUTER_IDLE_TIMEOUT > 0:
+            unload_when_idle_active = (
+                self._resource_low_impact_active
+                and self._effective_strategy() == "unload_when_idle"
+            )
+            if self._server_is_active and settings.LLAMA_ROUTER_IDLE_TIMEOUT > 0 and not unload_when_idle_active:
                 break
 
             if self._last_active_at:
                 elapsed = (datetime.now(timezone.utc) - self._last_active_at).total_seconds()
-                if elapsed >= settings.LLM_IDLE_TIMEOUT_SECONDS:
-                    logger.info(f"Model idle for {int(elapsed)}s (threshold: {settings.LLM_IDLE_TIMEOUT_SECONDS}s). Triggering auto-unload.")
+                threshold = (
+                    float(settings.RESOURCE_LOW_IMPACT_IDLE_SECONDS)
+                    if unload_when_idle_active
+                    else float(settings.LLM_IDLE_TIMEOUT_SECONDS)
+                )
+                if elapsed >= threshold:
+                    logger.info(
+                        f"Model idle for {int(elapsed)}s (threshold: {int(threshold)}s). Triggering auto-unload."
+                    )
                     await self.unload_model()
                     break
 
@@ -1141,8 +1343,8 @@ class LlamaCppProvider(BaseLLMProvider):
                 last_runtime_error=self._last_error,
                 is_loaded=False,
                 active_profile=self._active_profile,
-                context_size=self._applied_context_size or req_params["n_ctx"],
-                gpu_layers=self._applied_gpu_layers or req_params["n_gpu_layers"],
+                context_size=self._applied_context_size if self._applied_context_size is not None else req_params["n_ctx"],
+                gpu_layers=self._applied_gpu_layers if self._applied_gpu_layers is not None else req_params["n_gpu_layers"],
                 idle_timeout_seconds=settings.LLAMA_ROUTER_IDLE_TIMEOUT,
                 seconds_until_idle=None,
                 seconds_until_unload=None,

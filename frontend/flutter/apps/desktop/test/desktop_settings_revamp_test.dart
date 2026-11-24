@@ -52,6 +52,11 @@ void main() {
       expect(tools.status, equals(SettingsSectionStatus.available));
       expect(tools.milestoneHint, isNull);
 
+      final perf = kSettingsSections.firstWhere((s) => s.id == SettingsSectionId.health);
+      expect(perf.label, equals('Performance & Gaming'));
+      expect(perf.status, equals(SettingsSectionStatus.available));
+      expect(perf.milestoneHint, isNull);
+
       final general = kSettingsSections.firstWhere((s) => s.id == SettingsSectionId.general);
       expect(general.status, equals(SettingsSectionStatus.available));
     });

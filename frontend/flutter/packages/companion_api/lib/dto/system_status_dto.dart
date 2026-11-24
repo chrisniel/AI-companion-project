@@ -414,3 +414,132 @@ class AutostartUpdateRequest {
         'minimized_to_tray': minimizedToTray,
       };
 }
+
+/// Live host resource governance and Auto Gaming Mode status (GET/PUT /api/v1/system/resources).
+@immutable
+class ResourcePolicyStatusOut {
+  final String requestedMode;
+  final String effectiveMode;
+  final bool lowImpactActive;
+  final String lowImpactStrategy;
+  final String? lowImpactModelId;
+  final List<String> gameProcessList;
+  final List<String> detectedActiveGames;
+  final int cooldownSeconds;
+  final int cooldownRemainingSeconds;
+  final String transitionState;
+  final String? degradationReason;
+  final bool deferredBackgroundWork;
+  final String? hostGpuName;
+  final double? hostVramGb;
+  final double? hostRamGb;
+  final double? availableRamGb;
+  final String? appliedProfile;
+  final String requestedProfile;
+  final String telemetrySource;
+
+  const ResourcePolicyStatusOut({
+    required this.requestedMode,
+    required this.effectiveMode,
+    required this.lowImpactActive,
+    required this.lowImpactStrategy,
+    this.lowImpactModelId,
+    this.gameProcessList = const <String>[],
+    this.detectedActiveGames = const <String>[],
+    required this.cooldownSeconds,
+    this.cooldownRemainingSeconds = 0,
+    this.transitionState = 'idle',
+    this.degradationReason,
+    required this.deferredBackgroundWork,
+    this.hostGpuName,
+    this.hostVramGb,
+    this.hostRamGb,
+    this.availableRamGb,
+    this.appliedProfile,
+    required this.requestedProfile,
+    required this.telemetrySource,
+  });
+
+  factory ResourcePolicyStatusOut.fromJson(Map<String, dynamic> json) {
+    return ResourcePolicyStatusOut(
+      requestedMode: json['requested_mode'] as String? ?? 'normal',
+      effectiveMode: json['effective_mode'] as String? ?? 'normal',
+      lowImpactActive: json['low_impact_active'] as bool? ?? false,
+      lowImpactStrategy: json['low_impact_strategy'] as String? ?? 'cpu_eco',
+      lowImpactModelId: json['low_impact_model_id'] as String?,
+      gameProcessList: (json['game_process_list'] as List<dynamic>? ?? const [])
+          .map((e) => e.toString())
+          .toList(growable: false),
+      detectedActiveGames:
+          (json['detected_active_games'] as List<dynamic>? ?? const [])
+              .map((e) => e.toString())
+              .toList(growable: false),
+      cooldownSeconds: json['cooldown_seconds'] as int? ?? 45,
+      cooldownRemainingSeconds:
+          json['cooldown_remaining_seconds'] as int? ?? 0,
+      transitionState: json['transition_state'] as String? ?? 'idle',
+      degradationReason: json['degradation_reason'] as String?,
+      deferredBackgroundWork:
+          json['deferred_background_work'] as bool? ?? false,
+      hostGpuName: json['host_gpu_name'] as String?,
+      hostVramGb: (json['host_vram_gb'] as num?)?.toDouble(),
+      hostRamGb: (json['host_ram_gb'] as num?)?.toDouble(),
+      availableRamGb: (json['available_ram_gb'] as num?)?.toDouble(),
+      appliedProfile: json['applied_profile'] as String?,
+      requestedProfile: json['requested_profile'] as String? ?? 'balanced',
+      telemetrySource: json['telemetry_source'] as String? ?? 'unavailable',
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'requested_mode': requestedMode,
+        'effective_mode': effectiveMode,
+        'low_impact_active': lowImpactActive,
+        'low_impact_strategy': lowImpactStrategy,
+        if (lowImpactModelId != null) 'low_impact_model_id': lowImpactModelId,
+        'game_process_list': gameProcessList,
+        'detected_active_games': detectedActiveGames,
+        'cooldown_seconds': cooldownSeconds,
+        'cooldown_remaining_seconds': cooldownRemainingSeconds,
+        'transition_state': transitionState,
+        if (degradationReason != null) 'degradation_reason': degradationReason,
+        'deferred_background_work': deferredBackgroundWork,
+        if (hostGpuName != null) 'host_gpu_name': hostGpuName,
+        if (hostVramGb != null) 'host_vram_gb': hostVramGb,
+        if (hostRamGb != null) 'host_ram_gb': hostRamGb,
+        if (availableRamGb != null) 'available_ram_gb': availableRamGb,
+        if (appliedProfile != null) 'applied_profile': appliedProfile,
+        'requested_profile': requestedProfile,
+        'telemetry_source': telemetrySource,
+      };
+}
+
+/// Request DTO for PUT /api/v1/system/resources.
+@immutable
+class ResourcePolicyUpdateRequest {
+  final String? resourceMode;
+  final String? lowImpactStrategy;
+  final String? lowImpactModelId;
+  final bool clearLowImpactModel;
+  final List<String>? gameProcessList;
+  final int? cooldownSeconds;
+
+  const ResourcePolicyUpdateRequest({
+    this.resourceMode,
+    this.lowImpactStrategy,
+    this.lowImpactModelId,
+    this.clearLowImpactModel = false,
+    this.gameProcessList,
+    this.cooldownSeconds,
+  });
+
+  Map<String, dynamic> toJson() => {
+        if (resourceMode != null) 'resource_mode': resourceMode,
+        if (lowImpactStrategy != null)
+          'low_impact_strategy': lowImpactStrategy,
+        if (lowImpactModelId != null) 'low_impact_model_id': lowImpactModelId,
+        if (clearLowImpactModel) 'clear_low_impact_model': clearLowImpactModel,
+        if (gameProcessList != null) 'game_process_list': gameProcessList,
+        if (cooldownSeconds != null) 'cooldown_seconds': cooldownSeconds,
+      };
+}

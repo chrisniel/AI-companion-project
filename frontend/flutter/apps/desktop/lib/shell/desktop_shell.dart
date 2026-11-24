@@ -22,6 +22,9 @@ import '../features/voice/voice_shortcut_recorder.dart';
 import '../lifecycle/desktop_lifecycle_coordinator.dart';
 import '../platform/desktop_audio_adapter.dart';
 import '../platform/desktop_client_settings.dart';
+import '../platform/host_admin_secret_store.dart';
+import '../platform/windows_dpapi_credential_store.dart';
+import '../platform/windows_shell_adapter.dart';
 import '../platform/windows_toast_adapter.dart';
 import '../screens/chat_screen.dart';
 import '../screens/memory_screen.dart';
@@ -47,6 +50,7 @@ class DesktopShell extends StatefulWidget {
     this.voiceController,
     this.audioAdapter,
     this.toastAdapter,
+    this.shellAdapter,
     this.enableSchedulePolling,
   });
 
@@ -64,6 +68,7 @@ class DesktopShell extends StatefulWidget {
   final DesktopVoiceController? voiceController;
   final DesktopAudioAdapter? audioAdapter;
   final DesktopToastAdapter? toastAdapter;
+  final DesktopShellAdapter? shellAdapter;
   final bool? enableSchedulePolling;
 
   @override
@@ -93,6 +98,8 @@ class _DesktopShellState extends State<DesktopShell> {
   bool _ownsToastAdapter = false;
   bool _isBacklogDrawerOpen = false;
   DesktopNavDestination _lastDestination = DesktopNavDestination.chat;
+  final ValueNotifier<ResourcePolicyStatusOut?> _resourcePolicyNotifier =
+      ValueNotifier<ResourcePolicyStatusOut?>(null);
 
   @override
   void initState() {
@@ -239,6 +246,17 @@ class _DesktopShellState extends State<DesktopShell> {
         _shouldPollSchedule &&
         (widget.chatController?.isConnected ?? false)) {
       unawaited(_toolPolicyController?.refreshKillSwitch());
+    }
+    if (widget.coordinator != null) {
+      try {
+        widget.coordinator!.onResourceModeSelected =
+            _handleTrayResourceModeSelected;
+      } on UnimplementedError {
+        // Minimal Fake coordinators in widget tests may omit optional callbacks.
+      }
+    }
+    if (_shouldPollSchedule && (widget.chatController?.isConnected ?? false)) {
+      unawaited(_refreshResourcePolicyForTray());
     }
     widget.coordinator?.onExitMenuTriggered = () async {
       if (mounted) {
@@ -493,6 +511,70 @@ class _DesktopShellState extends State<DesktopShell> {
       _lastKnownVoiceConnected = connected;
       _lastKnownVoiceProfileId = effectiveProfileId;
     }
+    if (_shouldPollSchedule && connected && _resourcePolicyNotifier.value == null) {
+      unawaited(_refreshResourcePolicyForTray());
+    }
+  }
+
+  void _syncTrayFromResourcePolicy(ResourcePolicyStatusOut status) {
+    if (!mounted) return;
+    _resourcePolicyNotifier.value = status;
+    try {
+      unawaited(
+        widget.coordinator?.updateResourceMode(
+          status.requestedMode,
+          status.lowImpactActive,
+        ),
+      );
+    } on UnimplementedError {
+      // Minimal Fake coordinators in widget tests may omit optional tray sync.
+    }
+  }
+
+  Future<void> _refreshResourcePolicyForTray() async {
+    final existing = widget.chatController?.client;
+    CompanionClient? owned;
+    try {
+      final client = existing ??
+          CompanionClient(
+            baseUrl: await (widget.clientSettings ?? DesktopClientSettings())
+                .readHostUrl(),
+            credentialStore:
+                widget.credentialStore ?? WindowsDpapiCredentialStore(),
+            hostAdminStore: HostAdminSecretStore(),
+          );
+      if (existing == null) owned = client;
+      final status = await client.getResourcePolicy();
+      _syncTrayFromResourcePolicy(status);
+    } catch (_) {
+      // Best-effort tray hydration; Settings pane surfaces detailed errors.
+    } finally {
+      owned?.close();
+    }
+  }
+
+  Future<void> _handleTrayResourceModeSelected(String mode) async {
+    final existing = widget.chatController?.client;
+    CompanionClient? owned;
+    try {
+      final client = existing ??
+          CompanionClient(
+            baseUrl: await (widget.clientSettings ?? DesktopClientSettings())
+                .readHostUrl(),
+            credentialStore:
+                widget.credentialStore ?? WindowsDpapiCredentialStore(),
+            hostAdminStore: HostAdminSecretStore(),
+          );
+      if (existing == null) owned = client;
+      final updated = await client.updateResourcePolicy(
+        ResourcePolicyUpdateRequest(resourceMode: mode),
+      );
+      _syncTrayFromResourcePolicy(updated);
+    } catch (_) {
+      // Ignore transient offline tray click failures cleanly.
+    } finally {
+      owned?.close();
+    }
   }
 
   bool _isEditableTextFocused() {
@@ -636,6 +718,15 @@ class _DesktopShellState extends State<DesktopShell> {
     if (_ownsToastAdapter) {
       _toastAdapter?.dispose();
     }
+    try {
+      if (widget.coordinator?.onResourceModeSelected ==
+          _handleTrayResourceModeSelected) {
+        widget.coordinator?.onResourceModeSelected = null;
+      }
+    } on UnimplementedError {
+      // Ignore minimal fakes.
+    }
+    _resourcePolicyNotifier.dispose();
     super.dispose();
   }
 
@@ -949,6 +1040,9 @@ class _DesktopShellState extends State<DesktopShell> {
           scheduleController: _scheduleController,
           toolPolicyController: _toolPolicyController,
           voiceController: _voiceController,
+          shellAdapter: widget.shellAdapter ?? WindowsShellAdapter(),
+          resourceStatusListenable: _resourcePolicyNotifier,
+          onResourcePolicyChanged: _syncTrayFromResourcePolicy,
         );
     }
   }

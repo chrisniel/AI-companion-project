@@ -489,10 +489,13 @@ class DesktopRuntimeCoordinator {
 
     // 1. Initial check: is port already listening?
     final initialRemaining = remainingTime();
+    final initialProbeTimeout = initialRemaining < const Duration(milliseconds: 350)
+        ? initialRemaining
+        : const Duration(milliseconds: 350);
     final initialHealthTimeout = initialRemaining < const Duration(seconds: 2)
         ? initialRemaining
         : const Duration(seconds: 2);
-    final alreadyListening = await _supervisor.isPortListening(targetHost, targetPort, timeout: initialHealthTimeout);
+    final alreadyListening = await _supervisor.isPortListening(targetHost, targetPort, timeout: initialProbeTimeout);
     if (generation != _activeGeneration || _isDisposed) return _currentState;
 
     if (alreadyListening) {

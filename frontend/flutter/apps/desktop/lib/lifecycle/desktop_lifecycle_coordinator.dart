@@ -42,9 +42,12 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
   Future<void> Function()? onExitMenuTriggered;
   Future<void> Function()? onKillSwitchTriggered;
   Future<void> Function()? onMuteToggleTriggered;
+  Future<void> Function(String mode)? onResourceModeSelected;
   VoidCallback? onWindowRestored;
   bool _globalKillSwitchActive = false;
   bool _audioMuted = false;
+  String _resourceRequestedMode = 'normal';
+  bool _lowImpactActive = false;
 
   bool _isInitialized = false;
   bool _isWindowVisible = false;
@@ -115,61 +118,55 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
   RuntimeProcessState? _runtimeProcessState;
   RuntimeProcessState? get runtimeProcessState => _runtimeProcessState;
 
-  /// Updates the runtime process state and dynamically refreshes the system tray menu.
-  Future<void> updateRuntimeStatus(RuntimeProcessState state) async {
-    _runtimeProcessState = state;
+  Future<void> _refreshTrayMenuSafe(String errorContext) async {
     if (_isTrayAvailable && !_isDisposed) {
       try {
         await trayAdapter.setContextMenu(
           buildTrayContextMenu(
-            state,
+            _runtimeProcessState,
             null,
             _globalKillSwitchActive,
             _audioMuted,
+            _resourceRequestedMode,
+            _lowImpactActive,
           ),
         );
       } catch (e) {
-        debugPrint('DesktopLifecycleCoordinator: Error updating tray context menu: $e');
+        debugPrint('DesktopLifecycleCoordinator: Error updating $errorContext: $e');
       }
     }
+  }
+
+  /// Updates the runtime process state and dynamically refreshes the system tray menu.
+  Future<void> updateRuntimeStatus(RuntimeProcessState state) async {
+    _runtimeProcessState = state;
+    await _refreshTrayMenuSafe('tray context menu');
   }
 
   /// Updates the Global Tool Kill Switch state shown inside the system tray menu.
   Future<void> updateKillSwitchStatus(bool active) async {
     _globalKillSwitchActive = active;
-    if (_isTrayAvailable && !_isDisposed) {
-      try {
-        await trayAdapter.setContextMenu(
-          buildTrayContextMenu(
-            _runtimeProcessState,
-            null,
-            _globalKillSwitchActive,
-            _audioMuted,
-          ),
-        );
-      } catch (e) {
-        debugPrint('DesktopLifecycleCoordinator: Error updating tray kill switch menu: $e');
-      }
-    }
+    await _refreshTrayMenuSafe('tray kill switch menu');
   }
 
   /// Updates the Mute Audio toggle state shown inside the system tray menu.
   Future<void> updateAudioMutedStatus(bool muted) async {
     _audioMuted = muted;
-    if (_isTrayAvailable && !_isDisposed) {
-      try {
-        await trayAdapter.setContextMenu(
-          buildTrayContextMenu(
-            _runtimeProcessState,
-            null,
-            _globalKillSwitchActive,
-            _audioMuted,
-          ),
-        );
-      } catch (e) {
-        debugPrint('DesktopLifecycleCoordinator: Error updating tray mute menu: $e');
-      }
-    }
+    await _refreshTrayMenuSafe('tray mute menu');
+  }
+
+  /// Updates the Performance / Gaming Mode indicator shown in the system tray menu.
+  Future<void> updateResourceMode(
+    String? requestedMode,
+    bool lowImpactActive,
+  ) async {
+    final normalized = (requestedMode ?? 'normal').trim().toLowerCase();
+    _resourceRequestedMode =
+        (normalized == 'low_impact' || normalized == 'auto')
+            ? normalized
+            : 'normal';
+    _lowImpactActive = lowImpactActive;
+    await _refreshTrayMenuSafe('tray resource mode menu');
   }
 
   /// Builds the tray context menu items reflecting runtime supervision state.
@@ -182,19 +179,25 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
       includeDevTestActions,
       _globalKillSwitchActive,
       _audioMuted,
+      _resourceRequestedMode,
+      _lowImpactActive,
     );
   }
 
-  /// Builds tray context menu items with optional explicit D9 Kill Switch & Mute state.
+  /// Builds tray context menu items with optional explicit D9 Kill Switch, Mute & Resource Mode state.
   List<MenuItem> buildTrayMenuItemsWithSafety([
     RuntimeProcessState? state,
     bool? includeDevTestActions,
     bool? globalKillSwitchOverride,
     bool isAudioMuted = false,
+    String? resourceModeOverride,
+    bool? lowImpactActiveOverride,
   ]) {
     final runtime = state ?? _runtimeProcessState;
     final allowDevActions = includeDevTestActions ?? kDebugMode;
     final killSwitch = globalKillSwitchOverride ?? _globalKillSwitchActive;
+    final resourceMode = resourceModeOverride ?? _resourceRequestedMode;
+    final effectiveLowImpact = lowImpactActiveOverride ?? _lowImpactActive;
     String statusLabel;
     if (runtime == null) {
       statusLabel = 'Runtime: Standalone';
@@ -268,6 +271,35 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
         label: killSwitch ? 'Tools Killed (Reset in Settings)' : 'Emergency Stop Tools',
         disabled: killSwitch,
       ),
+      MenuItem.submenu(
+        key: 'performance_mode_menu',
+        label: effectiveLowImpact
+            ? (resourceMode == 'auto'
+                ? 'Performance: Auto Gaming (Low-Impact)'
+                : 'Performance: Low-Impact')
+            : (resourceMode == 'auto'
+                ? 'Performance: Auto Gaming (Normal)'
+                : 'Performance: Normal'),
+        submenu: Menu(
+          items: [
+            MenuItem.checkbox(
+              key: 'resource_mode_normal',
+              label: 'Normal',
+              checked: resourceMode == 'normal',
+            ),
+            MenuItem.checkbox(
+              key: 'resource_mode_low_impact',
+              label: 'Low-Impact',
+              checked: resourceMode == 'low_impact',
+            ),
+            MenuItem.checkbox(
+              key: 'resource_mode_auto',
+              label: 'Auto Gaming',
+              checked: resourceMode == 'auto',
+            ),
+          ],
+        ),
+      ),
     ];
 
     if (allowDevActions) {
@@ -297,6 +329,8 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
     bool? includeDevTestActions,
     bool globalKillSwitch = false,
     bool isAudioMuted = false,
+    String? resourceModeOverride,
+    bool? lowImpactActiveOverride,
   ]) {
     return Menu(
       items: buildTrayMenuItemsWithSafety(
@@ -304,6 +338,8 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
         includeDevTestActions,
         globalKillSwitch,
         isAudioMuted,
+        resourceModeOverride,
+        lowImpactActiveOverride,
       ),
     );
   }
@@ -436,6 +472,12 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
       if (onKillSwitchTriggered != null) {
         onKillSwitchTriggered!();
       }
+    } else if (menuItem.key == 'resource_mode_normal') {
+      onResourceModeSelected?.call('normal');
+    } else if (menuItem.key == 'resource_mode_low_impact') {
+      onResourceModeSelected?.call('low_impact');
+    } else if (menuItem.key == 'resource_mode_auto') {
+      onResourceModeSelected?.call('auto');
     } else if (menuItem.key == 'quit_ui_dev') {
       handleExitRequested();
     } else if (menuItem.key == 'exit_full' || menuItem.key == 'exit') {
