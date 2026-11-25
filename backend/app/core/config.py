@@ -233,6 +233,10 @@ class Settings(BaseSettings):
     SCHEDULER_MISSED_GRACE_SECONDS: int = 300
     MEMORY_EXPIRATION_SWEEP_INTERVAL_SECONDS: int = 300
 
+    # M5 Batch A: Host Resource Governance & Gaming Mode
+    RESOURCE_POLL_INTERVAL_SECONDS: float = 5.0
+    RESOURCE_LOW_IMPACT_IDLE_SECONDS: float = 60.0
+
     # M4 Batch B: Local Voice & Speech Pipeline (CPU-first, RAM-only transient audio)
     VOICE_PROVIDER: str = "auto"  # "auto" | "local" | "mock"
     VOICE_STT_MODEL_PATH: Optional[str] = None

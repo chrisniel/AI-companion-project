@@ -1059,6 +1059,16 @@ class _FakeDesktopShellAdapter implements DesktopShellAdapter {
   }
 
   @override
+  Future<List<String>> pickExecutableFiles({
+    String? title,
+    bool allowMultiple = true,
+    String? initialDirectory,
+  }) async {
+    pickFilesCalls++;
+    return filesResult;
+  }
+
+  @override
   Future<void> openFolder(String path, {bool createIfMissing = false}) async {}
 
   @override

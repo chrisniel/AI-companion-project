@@ -137,11 +137,11 @@
 - **`PC-RESILIENCE-003`**: Staged Restore Verification & Referential Integrity Preflight (Standalone verified utility delivered; automatic/live recovery pending host-level writer quiescence).
 - **`PC-RESILIENCE-004`**: Local Admin Factory Reset Engine (Wipes Account/Profile data; models/backups default keep).
 
-### Stream: `PC-RESOURCE` — Resource Governance & Gaming
-- **`PC-RESOURCE-001`**: Host Resource Policy Controller (Normal / Low Impact / Auto).
-- **`PC-RESOURCE-002`**: Option B Configured Game & Heavy App Detection with Cooldown Hysteresis.
-- **`PC-RESOURCE-003`**: Background Work Deferral & Durable Queue Throttling.
-- **`PC-RESOURCE-004`**: Low-Impact Lightweight Model Substitution (compatible lightweight local text model substitution. 1B-3B is an example/reference range only).
+### Stream: `PC-RESOURCE` — Resource Governance & Gaming *(M5 Batch A Implemented & Automated-Verified Locally)*
+- **`PC-RESOURCE-001`**: Host Resource Policy Controller (`Normal` / `Low Impact` / `Auto`, `ResourceGovernor`, thread-safe `host_config.json`, `GET`/`PUT /api/v1/system/resources`, `SettingsPerformanceSection` & Tray `Performance Mode` sync — delivered & automated-verified in M5 Batch A).
+- **`PC-RESOURCE-002`**: Option B Configured Game & Heavy App Detection with Cooldown Hysteresis (standard-user Win32 `ctypes` `CreateToolhelp32Snapshot` watchlist scan & configurable `5`–`300s` cooldown — delivered & automated-verified in M5 Batch A).
+- **`PC-RESOURCE-003`**: Background Work Deferral & Durable Queue Throttling (non-explicit extraction, periodic memory sweeps, and non-bypass Routines deferred during `Low-Impact` while strictly preserving Alarms, Reminders, and Task due reminders per D10 — delivered & automated-verified in M5 Batch A).
+- **`PC-RESOURCE-004`**: Low-Impact Lightweight Model Substitution (non-blocking `apply_resource_policy()`, `cpu_eco` / `unload_when_idle` `60s` / `lightweight_model` swap with fail-closed `cpu_eco` degradation & lazy `Normal` exit — delivered & automated-verified in M5 Batch A).
 
 ### Stream: `PC-VERIFY` — Verification & Golden Gate
 - **`PC-VERIFY-001`**: CI Pipeline Update (Always-running `ci-gate` failure aggregator, scoped PR/push matrix).

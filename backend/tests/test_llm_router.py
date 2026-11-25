@@ -935,3 +935,116 @@ async def test_router_spawn_windows_no_window_flag(llama_provider):
         kwargs = mock_popen.call_args.kwargs if hasattr(mock_popen.call_args, "kwargs") and mock_popen.call_args.kwargs else mock_popen.call_args[1]
         assert kwargs.get("creationflags") == getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
 
+
+def test_flatten_tool_messages_for_strict_template_alternates_roles():
+    """Strict user/assistant templates (e.g. Gemma 3) receive flattened alternating turns with zero role='tool'."""
+    from app.services.llm.llama_cpp import _flatten_tool_messages_for_strict_template
+
+    wire = [
+        {"role": "system", "content": "Be helpful."},
+        {"role": "user", "content": "Hi"},
+        {"role": "assistant", "content": "Hello!"},
+        {
+            "role": "user",
+            "content": [{"type": "text", "text": "Check December"}, {"type": "image_url", "image_url": {"url": "data:image/png;base64,AA=="}}],
+        },
+        {"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "type": "function"}]},
+        {"role": "tool", "name": "list_reminders", "tool_call_id": "c1", "content": '{"items": [{"title": "Wedding"}]}'},
+        {"role": "tool", "name": "list_tasks", "tool_call_id": "c2", "content": '{"items": []}'},
+    ]
+
+    flat = _flatten_tool_messages_for_strict_template(wire)
+    assert [m["role"] for m in flat] == ["system", "user", "assistant", "user"]
+    assert all("tool_calls" not in m and "tool_call_id" not in m for m in flat)
+    last_content = flat[-1]["content"]
+    assert isinstance(last_content, list)
+    texts = [b["text"] for b in last_content if b.get("type") == "text"]
+    joined = "\n".join(texts)
+    assert "[Verified Tool Result (list_reminders)]" in joined
+    assert "[Verified Tool Result (list_tasks)]" in joined
+    assert "Wedding" in joined
+
+
+@pytest.mark.asyncio
+async def test_llama_provider_retries_on_strict_template_400_with_flattened_tool_history(llama_provider):
+    """HTTP 400 from strict alternating-role GGUF templates retries once with flattened user/assistant messages and no tools."""
+    import json
+    from app.schemas.llm import ChatMessage
+
+    llama_provider._server_is_active = True
+    llama_provider._active_model_name = "gemma-3-4b-it"
+    llama_provider._is_loaded = True
+    llama_provider._active_generations = set()
+
+    recorded_payloads: list[dict] = []
+
+    class _FakeStreamResponse:
+        def __init__(self, status_code: int, lines: list[str], err_bytes: bytes = b""):
+            self.status_code = status_code
+            self.is_success = 200 <= status_code < 300
+            self._lines = lines
+            self._err_bytes = err_bytes
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def aread(self) -> bytes:
+            return self._err_bytes
+
+        async def aiter_lines(self):
+            for ln in self._lines:
+                yield ln
+
+    class _FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        def stream(self, method: str, url: str, json: dict):
+            recorded_payloads.append(json)
+            if len(recorded_payloads) == 1:
+                return _FakeStreamResponse(
+                    400,
+                    [],
+                    b'{"error":{"code":400,"message":"Conversation roles must alternate user/assistant"}}',
+                )
+            sse_lines = [
+                'data: {"choices":[{"delta":{"content":"You have Wedding on Dec 8."},"finish_reason":null}]}',
+                "",
+                'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}',
+                "",
+                "data: [DONE]",
+                "",
+            ]
+            return _FakeStreamResponse(200, sse_lines)
+
+    msgs = [
+        ChatMessage(role="system", content="System prompt"),
+        ChatMessage(role="user", content="Check schedule"),
+        ChatMessage(role="assistant", content="", tool_calls=[{"id": "c1", "type": "function"}]),
+        ChatMessage(role="tool", tool_call_id="c1", name="list_reminders", content='{"summary": "Wedding"}'),
+    ]
+
+    with patch.object(llama_provider, "_acquire_generation", AsyncMock(return_value=1)), \
+         patch.object(llama_provider, "_release_generation", lambda lease: None), \
+         patch("httpx.AsyncClient", _FakeAsyncClient):
+        stream = llama_provider.generate_stream(
+            msgs,
+            tools=[{"type": "function", "function": {"name": "list_reminders"}}],
+        )
+        chunks = [tok async for tok in stream]
+
+    assert "".join(chunks) == "You have Wedding on Dec 8."
+    assert len(recorded_payloads) == 2
+    assert "tools" in recorded_payloads[0]
+    assert "tools" not in recorded_payloads[1]
+    assert [m["role"] for m in recorded_payloads[1]["messages"]] == ["system", "user"]
+

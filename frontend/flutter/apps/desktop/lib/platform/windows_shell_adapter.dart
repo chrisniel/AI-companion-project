@@ -15,6 +15,12 @@ abstract class DesktopShellAdapter {
     String? initialDirectory,
   });
 
+  Future<List<String>> pickExecutableFiles({
+    String? title,
+    bool allowMultiple = true,
+    String? initialDirectory,
+  });
+
   Future<void> openFolder(
     String path, {
     bool createIfMissing = false,
@@ -63,6 +69,33 @@ class WindowsShellAdapter implements DesktopShellAdapter {
     bool allowMultiple = true,
     String? initialDirectory,
   }) async {
+    return _pickFilesWithPreset(
+      title: title,
+      allowMultiple: allowMultiple,
+      initialDirectory: initialDirectory,
+    );
+  }
+
+  @override
+  Future<List<String>> pickExecutableFiles({
+    String? title,
+    bool allowMultiple = true,
+    String? initialDirectory,
+  }) async {
+    return _pickFilesWithPreset(
+      title: title,
+      allowMultiple: allowMultiple,
+      initialDirectory: initialDirectory,
+      filterPreset: 'executables',
+    );
+  }
+
+  Future<List<String>> _pickFilesWithPreset({
+    String? title,
+    bool allowMultiple = true,
+    String? initialDirectory,
+    String? filterPreset,
+  }) async {
     if (!Platform.isWindows || Platform.environment.containsKey('FLUTTER_TEST')) {
       return const [];
     }
@@ -72,6 +105,8 @@ class WindowsShellAdapter implements DesktopShellAdapter {
         if (title != null && title.isNotEmpty) 'title': title,
         if (initialDirectory != null && initialDirectory.isNotEmpty)
           'initialDirectory': initialDirectory,
+        if (filterPreset != null && filterPreset.isNotEmpty)
+          'filterPreset': filterPreset,
       });
       if (result == null) return const [];
       return result

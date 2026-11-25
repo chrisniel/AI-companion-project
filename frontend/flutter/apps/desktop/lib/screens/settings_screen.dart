@@ -1,5 +1,6 @@
 import 'package:companion_api/companion_api.dart';
 import 'package:companion_design/companion_design.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../controllers/desktop_settings_controller.dart';
@@ -10,6 +11,7 @@ import '../features/schedule/desktop_schedule_controller.dart';
 import '../features/settings/sections/settings_appearance_section.dart';
 import '../features/settings/sections/settings_general_section.dart';
 import '../features/settings/sections/settings_notifications_section.dart';
+import '../features/settings/sections/settings_performance_section.dart';
 import '../features/settings/sections/settings_planned_section.dart';
 import '../features/settings/sections/settings_profiles_section.dart';
 import '../features/settings/sections/settings_runtime_section.dart';
@@ -41,6 +43,8 @@ class SettingsScreen extends StatefulWidget {
     this.toolPolicyController,
     this.voiceController,
     this.shellAdapter,
+    this.resourceStatusListenable,
+    this.onResourcePolicyChanged,
   });
 
   final DesktopSettingsController controller;
@@ -55,6 +59,8 @@ class SettingsScreen extends StatefulWidget {
   final DesktopToolPolicyController? toolPolicyController;
   final DesktopVoiceController? voiceController;
   final DesktopShellAdapter? shellAdapter;
+  final ValueListenable<ResourcePolicyStatusOut?>? resourceStatusListenable;
+  final ValueChanged<ResourcePolicyStatusOut>? onResourcePolicyChanged;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -178,6 +184,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  ValueListenable<bool>? _resolveWindowFocusedListenable() {
+    try {
+      return widget.coordinator?.isWindowFocusedListenable;
+    } on UnimplementedError {
+      return null;
+    }
+  }
+
   Widget _buildSectionStack(SettingsSectionId selectedSection) {
     final activeIndex = kSettingsSections.indexWhere(
       (meta) => meta.id == selectedSection,
@@ -187,12 +201,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
       index: activeIndex < 0 ? 0 : activeIndex,
       sizing: StackFit.expand,
       children: kSettingsSections
-          .map((meta) => _buildSectionPane(meta))
+          .map((meta) => _buildSectionPane(meta, selectedSection))
           .toList(growable: false),
     );
   }
 
-  Widget _buildSectionPane(SettingsSectionMeta meta) {
+  Widget _buildSectionPane(
+    SettingsSectionMeta meta,
+    SettingsSectionId selectedSection,
+  ) {
     final Widget sectionBody = switch (meta.id) {
       SettingsSectionId.appearance => SettingsAppearanceSection(
           controller: widget.controller,
@@ -233,7 +250,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       SettingsSectionId.voice => SettingsVoiceSection(
           voiceController: widget.voiceController,
         ),
-      SettingsSectionId.health ||
+      SettingsSectionId.health => SettingsPerformanceSection(
+          client: widget.client,
+          clientSettings: widget.clientSettings,
+          credentialStore: widget.credentialStore,
+          shellAdapter: widget.shellAdapter,
+          externalStatus: widget.resourceStatusListenable,
+          onResourcePolicyChanged: widget.onResourcePolicyChanged,
+          isActiveTab: selectedSection == SettingsSectionId.health,
+          windowFocusedListenable: _resolveWindowFocusedListenable(),
+        ),
       SettingsSectionId.network =>
         SettingsPlannedSection(section: meta),
     };

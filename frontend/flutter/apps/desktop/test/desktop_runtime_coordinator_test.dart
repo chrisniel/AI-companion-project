@@ -111,6 +111,7 @@ class FakeSupervisor extends WindowsRuntimeProcessSupervisor {
   bool processActive = false;
   int spawnCallCount = 0;
   List<String>? lastSpawnedArgs;
+  final List<Duration> portProbeTimeouts = <Duration>[];
   bool clearedLockfile = false;
   RuntimeLockfileData? lastTerminatedDescriptor;
   TerminationResult fakeTerminationResult = const TerminationResult(
@@ -146,6 +147,7 @@ class FakeSupervisor extends WindowsRuntimeProcessSupervisor {
     int port, {
     Duration timeout = const Duration(milliseconds: 500),
   }) async {
+    portProbeTimeouts.add(timeout);
     return portListening;
   }
 
@@ -691,6 +693,41 @@ void main() {
       expect(outcome, equals(ShutdownOutcome.incompleteCleanup));
       expect(coordinator.currentState.status, equals(RuntimeStatus.shutdownFailed));
       expect(coordinator.currentState.shutdownFailureReason, equals(ShutdownFailureReason.incompleteCleanup));
+    });
+
+    test('uses bounded 350ms initial port probe timeout on cold start', () async {
+      final tempDir = await Directory.systemTemp.createTemp('coord_probe_');
+      final fakeExe = File('${tempDir.path}\\pythonw.exe')..writeAsStringSync('');
+      final fakeLock = File('${tempDir.path}\\runtime.lock');
+      final handle = await fakeLock.open(mode: FileMode.append);
+      try {
+        final fakeSupervisor = FakeSupervisor()
+          ..portListening = false
+          ..fakeLockHandle = handle;
+        final mockClient = TestMockCompanionClient();
+        final coordinator = DesktopRuntimeCoordinator(
+          baseUrl: 'http://127.0.0.1:8000',
+          supervisor: fakeSupervisor,
+          client: mockClient,
+          customLockFile: fakeLock,
+          customExecutablePath: fakeExe.path,
+          customLogFilePath: '${tempDir.path}\\runtime.log',
+          customWorkingDirectory: tempDir.path,
+        );
+
+        final state = await coordinator.ensureRuntimeReady(
+          timeout: const Duration(seconds: 5),
+        );
+        expect(state.status, equals(RuntimeStatus.readyAndAuthenticated));
+        expect(fakeSupervisor.portProbeTimeouts, isNotEmpty);
+        expect(
+          fakeSupervisor.portProbeTimeouts.first.inMilliseconds,
+          lessThanOrEqualTo(350),
+        );
+      } finally {
+        await handle.close();
+        await tempDir.delete(recursive: true);
+      }
     });
   });
 }

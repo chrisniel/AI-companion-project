@@ -58,6 +58,29 @@ void main() {
       expect(find.byType(SelectableText), findsOneWidget);
     });
 
+    testWidgets('renders bold followed by em-dash and bold containing single asterisks cleanly', (tester) async {
+      const markdown = 'Remember **December 8**—and **2 * 3 equals 6** today.';
+      await tester.pumpWidget(
+        wrapWidget(
+          const AssistantMarkdownView(content: markdown),
+        ),
+      );
+
+      final selectable = tester.widget<SelectableText>(find.byType(SelectableText));
+      final rootSpan = selectable.textSpan!;
+      final boldTexts = <String>[];
+      void visit(InlineSpan span) {
+        if (span is TextSpan) {
+          if (span.style?.fontWeight == FontWeight.w700 && span.text != null) {
+            boldTexts.add(span.text!);
+          }
+          span.children?.forEach(visit);
+        }
+      }
+      visit(rootSpan);
+      expect(boldTexts, containsAll(<String>['December 8', '2 * 3 equals 6']));
+    });
+
     testWidgets('renders fenced code block with language header and copy button', (tester) async {
       const markdown = '''
 ```python

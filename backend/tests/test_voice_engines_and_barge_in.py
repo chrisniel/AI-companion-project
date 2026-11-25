@@ -356,7 +356,37 @@ def test_tts_espeak_g2p_taglish_and_preprocessing():
 
     date_and_range = preprocess_text_for_tts("November 22-30 vs 2026-11-21")
     assert "November 22 to 30" in date_and_range
-    assert "2026-11-21" in date_and_range
+    assert "November 21, 2026" in date_and_range
+    assert "2026-11-21" not in date_and_range
+
+    iso_dt = preprocess_text_for_tts("Scheduled **Wedding prep**—starting 2026-12-08T14:30:00+08:00.")
+    assert "**" not in iso_dt
+    assert "2026-12-08" not in iso_dt
+    assert "December 8, 2026 at 2 30 PM" in iso_dt
+
+    # Natural clock-time normalization & no colon split on numeric times
+    assert preprocess_text_for_tts("Reminder at 2:00 PM and 2:00PM.") == "Reminder at 2 PM and 2 PM."
+    assert preprocess_text_for_tts("ISO-8601 Timestamp: 2026-12-08T07:00:00+08:00") == "I S O-8601 Timestamp: December 8, 2026 at 7 AM."
+    assert preprocess_text_for_tts("Check 9:05 PM, 9:18 PM, and meeting at 2:00.") == "Check 9 oh 5 PM, 9 18 PM, and meeting at 2 o'clock."
+    clock_ipa = text_to_kokoro_ipa("Reminder at 2:00 PM.")
+    assert "zˈɪəɹoʊ" not in clock_ipa
+    assert "zˈiːɹoʊ" not in clock_ipa
+
+    # Markdown bullets & spaced hyphens end each item cleanly with a pause
+    bullet_text = preprocess_text_for_tts(
+        "Here are your events:\n"
+        "- **December 7th:** Task - \"Final App Testing\" – Estimated Duration: 3 hours\n"
+        "• **December 8th:** Alarm – \"Morning Routine\" – 7:00 AM\n"
+        "- **December 15th:** Reminder – \"UI/UX Review\" - 2:00 PM\n"
+        "- **Note:**\n"
+        "- **Done!**\n"
+    )
+    assert "3 hours. December 8th:" in bullet_text
+    assert "7 AM. December 15th:" in bullet_text
+    assert "Task, \"Final App Testing\", Estimated Duration" in bullet_text
+    assert "\"U I or UX Review\", 2 PM." in bullet_text
+    assert "Note:." not in bullet_text
+    assert "Done!." not in bullet_text
 
     em_dash = preprocess_text_for_tts("But wait—your friend’s wedding is on December 8th—really!")
     assert "—" not in em_dash

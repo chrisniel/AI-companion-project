@@ -5,6 +5,7 @@ from array import array
 import asyncio
 import base64
 from dataclasses import dataclass
+from datetime import datetime
 import io
 import json
 import math
@@ -29,7 +30,7 @@ _EMOJI_RE = re.compile(
     r"[\U00010000-\U0010FFFF\u2600-\u27BF\u2300-\u23FF\u2B00-\u2BFF]+",
     flags=re.UNICODE,
 )
-_ACRONYM_RE = re.compile(r"\b(CPU|GPU|API|RAM|UI|TTS|STT|LLM|JSON|SQL|PC|SDK|WS)\b")
+_ACRONYM_RE = re.compile(r"\b(CPU|GPU|API|RAM|UI|TTS|STT|LLM|JSON|SQL|PC|SDK|WS|ISO)\b")
 
 _TAGALOG_LEXICON_IPA: dict[str, str] = {
     "ako": "ɑkˈɔ",
@@ -289,6 +290,76 @@ def preprocess_text_for_tts(text: str) -> str:
     cleaned = _URL_RE.sub("", cleaned)
     cleaned = cleaned.replace("```", " ").replace("`", "")
 
+    # Preserve bullet/list item boundaries as natural sentence pauses before flattening newlines.
+    formatted_lines: list[str] = []
+    for raw_line in cleaned.splitlines():
+        line = re.sub(r"^\s*(?:[-*•▪▸►]+|\d+[.)])\s+", "", raw_line).strip()
+        line = re.sub(r"[*_~]+", "", line).strip()
+        if not line:
+            continue
+        if re.search(r"[A-Za-z0-9]", line) and not re.search(r"[.!?;:,—–]\s*$", line):
+            line = f"{line}."
+        formatted_lines.append(line)
+    if formatted_lines:
+        cleaned = " ".join(formatted_lines)
+
+    cleaned = re.sub(r"[*_~]+", "", cleaned)
+
+    def _format_iso_datetime(m: re.Match[str]) -> str:
+        try:
+            dt = datetime(
+                int(m.group(1)),
+                int(m.group(2)),
+                int(m.group(3)),
+                int(m.group(4)),
+                int(m.group(5)),
+            )
+        except ValueError:
+            return m.group(0)
+        hour_12 = dt.hour % 12 or 12
+        am_pm = "AM" if dt.hour < 12 else "PM"
+        return f"{dt.strftime('%B')} {dt.day}, {dt.year} at {hour_12}:{dt.minute:02d} {am_pm}"
+
+    def _format_iso_date(m: re.Match[str]) -> str:
+        try:
+            dt = datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            return m.group(0)
+        return f"{dt.strftime('%B')} {dt.day}, {dt.year}"
+
+    cleaned = re.sub(
+        r"\b(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?\b",
+        _format_iso_datetime,
+        cleaned,
+    )
+    cleaned = re.sub(
+        r"\b(\d{4})-(\d{2})-(\d{2})\b",
+        _format_iso_date,
+        cleaned,
+    )
+
+    def _format_clock_time_ampm(m: re.Match[str]) -> str:
+        hour = int(m.group(1))
+        mins_str = m.group(2)
+        ampm = m.group(3).upper()
+        if mins_str == "00":
+            return f"{hour} {ampm}"
+        mins = int(mins_str)
+        if mins_str.startswith("0"):
+            return f"{hour} oh {mins} {ampm}"
+        return f"{hour} {mins} {ampm}"
+
+    cleaned = re.sub(
+        r"(?i)\b(1[0-2]|0?[1-9]):([0-5]\d)\s*(AM|PM)\b",
+        _format_clock_time_ampm,
+        cleaned,
+    )
+    cleaned = re.sub(
+        r"(?i)\b(at|by|around|until|from|to)\s+(1[0-2]|0?[1-9]):00\b(?!\s*(?:AM|PM)\b)",
+        lambda m: f"{m.group(1)} {int(m.group(2))} o'clock",
+        cleaned,
+    )
+
     def _unit_name(unit: str) -> str:
         return "degrees Celsius" if unit.lower() == "c" else "degrees Fahrenheit"
 
@@ -323,10 +394,11 @@ def preprocess_text_for_tts(text: str) -> str:
         r"\1 to \2",
         cleaned,
     )
-    # Normalize prose em/en-dashes to natural comma pauses before espeak-ng splits clauses on '—'.
+    # Normalize prose em/en-dashes and spaced ASCII hyphens to natural comma pauses before espeak-ng splits clauses.
     cleaned = re.sub(r"(?<=[,.;:!?])\s*[—–]+\s*", " ", cleaned)
     cleaned = re.sub(r"\s*[—–]+\s*(?=[.!?]|$)", "", cleaned)
     cleaned = re.sub(r"\s*[—–]+\s*", ", ", cleaned)
+    cleaned = re.sub(r"\s+-\s+", ", ", cleaned)
     cleaned = re.sub(r"(\d+(?:\.\d+)?)\s*%", r"\1 percent", cleaned)
     cleaned = re.sub(r"(\d+)\.(\d+)", r"\1 point \2", cleaned)
     cleaned = re.sub(r"\s*(?:->|=>|[→⇒➜➔⟶])\s*", ", ", cleaned)
@@ -397,7 +469,7 @@ class _LazyEspeakPhonemizer:
                 else:
                     lib.espeak_SetVoiceByName(b"en-us")
                     self._active_voice = b"en-us"
-            clause_matches = list(re.finditer(r"([^.,!?;:—]*)([.,!?;:—]*)", text))
+            clause_matches = list(re.finditer(r"((?:[^.,!?;—:]|:(?=\d))*)((?:[.,!?;—]|:(?!\d))*)", text))
             clause_phonemes: list[str] = []
             for m in clause_matches:
                 body = (m.group(1) or "").strip()
@@ -467,7 +539,7 @@ def text_to_kokoro_ipa(text: str, *, language: str = "en-us") -> str:
     cleaned = preprocess_text_for_tts(text)
     if not cleaned:
         return ""
-    tokens = re.findall(r"[A-Za-z0-9']+|[.,!?;:()—\-]+|[^\w\s]+|\s+", cleaned)
+    tokens = re.findall(r"[A-Za-z0-9']+(?::\d+)*|[.,!?;:()—\-]+|[^\w\s]+|\s+", cleaned)
     rendered: list[str] = []
     english_buf: list[str] = []
 

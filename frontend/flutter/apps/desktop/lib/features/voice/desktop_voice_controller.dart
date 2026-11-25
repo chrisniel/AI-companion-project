@@ -467,18 +467,35 @@ class DesktopVoiceController extends ChangeNotifier {
     final trimmed = rawText.trim();
     if (trimmed.isEmpty) return const [];
     final bounded = trimmed.length > 2000 ? trimmed.substring(0, 2000) : trimmed;
-    final parts = bounded
-        .split(RegExp(r'(?<=[.!?])\s+|\n+'))
+
+    // Preserve line/bullet breaks as explicit sentence boundaries so list items
+    // never run together continuously in Kokoro TTS.
+    final normalizedLines = <String>[];
+    for (final rawLine in bounded.split(RegExp(r'\r?\n'))) {
+      var line = rawLine
+          .replaceFirst(RegExp(r'^\s*(?:[-*•▪▸►]+|\d+[.)])\s+'), '')
+          .trim();
+      if (line.isEmpty || !RegExp(r'[A-Za-z0-9]').hasMatch(line)) continue;
+      if (!RegExp(r'[.!?;:][*_~"\x27)\]]*\s*$').hasMatch(line)) {
+        line = '$line.';
+      }
+      normalizedLines.add(line);
+    }
+    if (normalizedLines.isEmpty) return const [];
+
+    final parts = normalizedLines
+        .expand((line) => line.split(RegExp(r'(?<=[.!?])\s+')))
         .map((s) => s.trim())
         .where((s) => s.isNotEmpty && RegExp(r'[A-Za-z0-9]').hasMatch(s))
         .toList();
     if (parts.isEmpty) return const [];
 
+    const maxGroupedChunkChars = 160;
     final merged = <String>[];
     for (final part in parts) {
       if (merged.isNotEmpty &&
           merged.last.length < 24 &&
-          '${merged.last} $part'.length <= 360) {
+          '${merged.last} $part'.length <= maxGroupedChunkChars) {
         merged[merged.length - 1] = '${merged.last} $part';
       } else {
         merged.add(part);
@@ -486,15 +503,15 @@ class DesktopVoiceController extends ChangeNotifier {
     }
     if (merged.length <= 2) return merged;
 
-    // Keep Chunk 0 as a single fast lead sentence, then group subsequent sentences
-    // up to 360 chars so multi-sentence replies stream smoothly with natural cadence.
+    // Keep Chunk 0 as a fast lead sentence, and keep subsequent chunks <= 160 chars
+    // so Kokoro synthesizes Chunk 1 before Chunk 0 finishes playing (no dead-air pause).
     final grouped = <String>[merged.first];
     var buf = '';
     for (var i = 1; i < merged.length; i++) {
       final next = merged[i];
       if (buf.isEmpty) {
         buf = next;
-      } else if (buf.length + 1 + next.length <= 360) {
+      } else if (buf.length + 1 + next.length <= maxGroupedChunkChars) {
         buf = '$buf $next';
       } else {
         grouped.add(buf);

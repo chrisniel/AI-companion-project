@@ -32,10 +32,10 @@ def clear_hardware_probe_cache() -> None:
     _CACHED_HARDWARE = None
 
 
-def _probe_windows_memory() -> tuple[float, float]:
-    """Read physical system RAM via Win32 GlobalMemoryStatusEx without external deps."""
+def _probe_windows_memory_raw() -> Optional[tuple[float, float]]:
+    """Read physical system RAM via Win32 GlobalMemoryStatusEx without synthetic fallbacks."""
     if sys.platform != "win32":
-        return 16.0, 8.0
+        return None
 
     class _MemoryStatusEx(ctypes.Structure):
         _fields_ = [
@@ -59,7 +59,38 @@ def _probe_windows_memory() -> tuple[float, float]:
             return max(total_gb, 0.5), max(avail_gb, 0.25)
     except Exception as exc:
         logger.debug(f"GlobalMemoryStatusEx probe failed: {exc}")
+    return None
+
+
+def _probe_windows_memory() -> tuple[float, float]:
+    """Read physical system RAM via Win32 GlobalMemoryStatusEx with recommendation default fallback."""
+    live = _probe_windows_memory_raw()
+    if live is not None:
+        return live
     return 16.0, 8.0
+
+
+def probe_live_system_memory() -> tuple[Optional[float], Optional[float], str]:
+    """Return truthful live OS (total_ram_gb, available_ram_gb, source) without synthetic defaults."""
+    live = _probe_windows_memory_raw()
+    if live is not None:
+        return live[0], live[1], "windows_global_memory_status"
+    return None, None, "unavailable"
+
+
+def probe_live_gpu_telemetry() -> tuple[Optional[str], Optional[float], str]:
+    """Return truthful live (gpu_name, dedicated_vram_gb, source) without synthetic defaults."""
+    env_vram_raw = os.environ.get("HOST_DEDICATED_VRAM_GB", "").strip()
+    if env_vram_raw:
+        try:
+            env_vram = max(0.5, float(env_vram_raw))
+            return "Configured VRAM Override", round(env_vram, 2), "env_override"
+        except ValueError:
+            pass
+    gpu_name, probed_vram = _probe_windows_gpu_vram()
+    if probed_vram is not None:
+        return gpu_name, probed_vram, "windows_winreg"
+    return None, None, "unavailable"
 
 
 def _probe_windows_gpu_vram() -> tuple[Optional[str], Optional[float]]:

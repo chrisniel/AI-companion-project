@@ -332,3 +332,154 @@ async def test_web_config_secret_isolation_and_profile_purge_cascade(
             select(ToolConfirmation).where(ToolConfirmation.profile_id == p2.id)
         )
     ).scalars().all() == []
+
+
+@pytest.mark.asyncio
+async def test_productivity_adapters_localize_timestamps_and_preserve_iso_keys(
+    test_session: AsyncSession, profile_id: str, profile_session
+):
+    profile = await test_session.get(Profile, profile_id)
+    assert profile is not None
+    profile.quiet_hours_timezone = "Asia/Manila"
+    await test_session.commit()
+
+    conv = await _make_conversation(test_session, profile_id)
+
+    create_rem = await execute_tool_intent(
+        db=test_session,
+        profile_session=profile_session,
+        conversation_id=conv.id,
+        tool_name="create_reminder",
+        arguments={"title": "Take vitamins", "scheduled_at": "2026-12-08T01:30:00+00:00"},
+        provenance="EXPLICIT_USER",
+    )
+    assert create_rem.executed is True
+    assert "December 8, 2026 at 9:30 AM" in create_rem.summary
+    assert "T01:30" not in create_rem.summary
+    assert create_rem.payload["reminder"]["scheduled_at_local"] == "December 8, 2026 at 9:30 AM"
+    assert create_rem.payload["reminder"]["scheduled_at"].startswith("2026-12-08T01:30:00")
+
+    list_rem = await execute_tool_intent(
+        db=test_session,
+        profile_session=profile_session,
+        conversation_id=conv.id,
+        tool_name="list_reminders",
+        arguments={},
+        provenance="EXPLICIT_USER",
+    )
+    assert list_rem.executed is True
+    assert "December 8, 2026 at 9:30 AM" in list_rem.summary
+    assert list_rem.payload["items"][0]["scheduled_at_local"] == "December 8, 2026 at 9:30 AM"
+    assert list_rem.payload["items"][0]["scheduled_at"].startswith("2026-12-08T01:30:00")
+
+    create_task = await execute_tool_intent(
+        db=test_session,
+        profile_session=profile_session,
+        conversation_id=conv.id,
+        tool_name="create_task",
+        arguments={"title": "Buy ring", "due_at": "2026-12-08T01:30:00+00:00"},
+        provenance="EXPLICIT_USER",
+    )
+    assert create_task.executed is True
+    assert "December 8, 2026 at 9:30 AM" in create_task.summary
+    assert create_task.payload["task"]["due_at_local"] == "December 8, 2026 at 9:30 AM"
+
+    list_tasks = await execute_tool_intent(
+        db=test_session,
+        profile_session=profile_session,
+        conversation_id=conv.id,
+        tool_name="list_tasks",
+        arguments={},
+        provenance="EXPLICIT_USER",
+    )
+    assert list_tasks.executed is True
+    assert "December 8, 2026 at 9:30 AM" in list_tasks.summary
+    assert list_tasks.payload["items"][0]["due_at_local"] == "December 8, 2026 at 9:30 AM"
+
+    create_alarm = await execute_tool_intent(
+        db=test_session,
+        profile_session=profile_session,
+        conversation_id=conv.id,
+        tool_name="create_alarm",
+        arguments={"label": "Standup", "time_of_day": "08:00"},
+        provenance="EXPLICIT_USER",
+    )
+    assert create_alarm.executed is True
+    assert create_alarm.payload["alarm"]["scheduled_at_local"]
+
+    list_alarms = await execute_tool_intent(
+        db=test_session,
+        profile_session=profile_session,
+        conversation_id=conv.id,
+        tool_name="list_alarms",
+        arguments={},
+        provenance="EXPLICIT_USER",
+    )
+    assert list_alarms.executed is True
+    assert list_alarms.payload["items"][0]["scheduled_at_local"]
+    assert "Standup" in list_alarms.summary
+
+    # Default list_reminders returns scheduled + snoozed items only, omitting old fired/dismissed rows
+    from datetime import datetime, timezone
+    from app.models.reminder import Reminder
+    from app.models.task import Task
+
+    snoozed_rem = Reminder(
+        profile_id=profile_session.profile_id,
+        title="Snoozed flight check-in",
+        scheduled_at=datetime(2026, 12, 9, 6, 0, tzinfo=timezone.utc),
+        timezone="Asia/Manila",
+        status="snoozed",
+    )
+    fired_rem = Reminder(
+        profile_id=profile_session.profile_id,
+        title="Old fired reminder",
+        scheduled_at=datetime(2026, 10, 1, 8, 0, tzinfo=timezone.utc),
+        timezone="Asia/Manila",
+        status="fired",
+    )
+    completed_task = Task(
+        profile_id=profile_session.profile_id,
+        title="Done ancient task",
+        status="completed",
+    )
+    test_session.add_all([snoozed_rem, fired_rem, completed_task])
+    await test_session.commit()
+
+    active_rems = await execute_tool_intent(
+        db=test_session,
+        profile_session=profile_session,
+        conversation_id=conv.id,
+        tool_name="list_reminders",
+        arguments={},
+        provenance="EXPLICIT_USER",
+    )
+    assert active_rems.executed is True
+    rem_titles = {it["title"] for it in active_rems.payload["items"]}
+    assert "Take vitamins" in rem_titles
+    assert "Snoozed flight check-in" in rem_titles
+    assert "Old fired reminder" not in rem_titles
+
+    explicit_fired = await execute_tool_intent(
+        db=test_session,
+        profile_session=profile_session,
+        conversation_id=conv.id,
+        tool_name="list_reminders",
+        arguments={"status": "fired"},
+        provenance="EXPLICIT_USER",
+    )
+    assert explicit_fired.executed is True
+    assert {it["title"] for it in explicit_fired.payload["items"]} == {"Old fired reminder"}
+
+    active_tasks = await execute_tool_intent(
+        db=test_session,
+        profile_session=profile_session,
+        conversation_id=conv.id,
+        tool_name="list_tasks",
+        arguments={},
+        provenance="EXPLICIT_USER",
+    )
+    assert active_tasks.executed is True
+    task_titles = {it["title"] for it in active_tasks.payload["items"]}
+    assert "Buy ring" in task_titles
+    assert "Done ancient task" not in task_titles

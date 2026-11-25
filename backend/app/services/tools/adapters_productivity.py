@@ -41,6 +41,19 @@ def _parse_iso_utc(raw: str, tz_name: str = "UTC") -> datetime:
     return normalized
 
 
+def _format_human_local_datetime(dt_utc: Optional[datetime], tz_name: str = "UTC") -> Optional[str]:
+    """Render an aware/naive UTC timestamp in natural local 12-hour text."""
+    if dt_utc is None:
+        return None
+    aware_utc = as_utc(dt_utc)
+    if aware_utc is None:
+        return None
+    local_dt = aware_utc.astimezone(resolve_timezone(tz_name or "UTC"))
+    hour_12 = local_dt.hour % 12 or 12
+    am_pm = "AM" if local_dt.hour < 12 else "PM"
+    return f"{local_dt.strftime('%B')} {local_dt.day}, {local_dt.year} at {hour_12}:{local_dt.minute:02d} {am_pm}"
+
+
 async def _get_owned_row(db: AsyncSession, model_cls, row_id: str, profile_id: str, label: str):
     row = (
         await db.execute(
@@ -56,56 +69,119 @@ async def _get_owned_row(db: AsyncSession, model_cls, row_id: str, profile_id: s
     return row
 
 
-async def run_list_tasks(db: AsyncSession, profile_id: str, args: dict[str, Any]) -> dict[str, Any]:
+async def run_list_tasks(
+    db: AsyncSession,
+    profile_id: str,
+    args: dict[str, Any],
+    profile: Optional[Profile] = None,
+) -> dict[str, Any]:
+    tz_name = getattr(profile, "quiet_hours_timezone", "UTC") or "UTC"
     stmt = select(Task).where(Task.profile_id == profile_id, Task.is_deleted.is_(False))
     if args.get("status"):
         stmt = stmt.where(Task.status == args["status"])
-    stmt = stmt.order_by(Task.created_at.desc()).limit(int(args.get("limit", 20)))
+    else:
+        stmt = stmt.where(Task.status.in_(("pending", "in_progress")))
+    stmt = stmt.order_by(Task.created_at.desc()).limit(int(args.get("limit", 50)))
     rows = (await db.execute(stmt)).scalars().all()
-    items = [
-        {"id": r.id, "title": r.title, "status": r.status, "priority": r.priority, "due_at": r.due_date.isoformat() if r.due_date else None}
-        for r in rows
-    ]
-    return {"summary": f"Listed {len(items)} active task(s).", "items": items, "target_summary": f"{len(items)} task(s)"}
+    items = []
+    for r in rows:
+        due_local = _format_human_local_datetime(r.due_date, tz_name)
+        items.append(
+            {
+                "id": r.id,
+                "title": r.title,
+                "status": r.status,
+                "priority": r.priority,
+                "due_at": r.due_date.isoformat() if r.due_date else None,
+                "due_at_local": due_local,
+            }
+        )
+    if items:
+        preview = "; ".join(
+            f'"{it["title"]}" (due {it["due_at_local"]})' if it["due_at_local"] else f'"{it["title"]}"'
+            for it in items[:15]
+        )
+        summary = f"Listed {len(items)} active task(s): {preview}."
+    else:
+        summary = "Listed 0 active task(s)."
+    return {"summary": summary, "items": items, "target_summary": f"{len(items)} task(s)"}
 
 
-async def run_list_reminders(db: AsyncSession, profile_id: str, args: dict[str, Any]) -> dict[str, Any]:
+async def run_list_reminders(
+    db: AsyncSession,
+    profile_id: str,
+    args: dict[str, Any],
+    profile: Optional[Profile] = None,
+) -> dict[str, Any]:
+    default_tz = getattr(profile, "quiet_hours_timezone", "UTC") or "UTC"
     stmt = select(Reminder).where(Reminder.profile_id == profile_id, Reminder.is_deleted.is_(False))
     if args.get("status"):
         stmt = stmt.where(Reminder.status == args["status"])
-    stmt = stmt.order_by(Reminder.scheduled_at.asc()).limit(int(args.get("limit", 20)))
+    else:
+        stmt = stmt.where(Reminder.status.in_(("scheduled", "snoozed")))
+    stmt = stmt.order_by(Reminder.scheduled_at.asc()).limit(int(args.get("limit", 50)))
     rows = (await db.execute(stmt)).scalars().all()
-    items = [
-        {
-            "id": r.id,
-            "title": r.title,
-            "status": r.status,
-            "scheduled_at": r.scheduled_at.isoformat() if r.scheduled_at else None,
-            "bypass_quiet_hours": r.bypass_quiet_hours,
-        }
-        for r in rows
-    ]
-    return {"summary": f"Listed {len(items)} reminder(s).", "items": items, "target_summary": f"{len(items)} reminder(s)"}
+    items = []
+    for r in rows:
+        row_tz = getattr(r, "timezone", None) or default_tz
+        sched_local = _format_human_local_datetime(r.scheduled_at, row_tz)
+        items.append(
+            {
+                "id": r.id,
+                "title": r.title,
+                "status": r.status,
+                "scheduled_at": r.scheduled_at.isoformat() if r.scheduled_at else None,
+                "scheduled_at_local": sched_local,
+                "bypass_quiet_hours": r.bypass_quiet_hours,
+            }
+        )
+    if items:
+        preview = "; ".join(
+            f'"{it["title"]}" ({it["scheduled_at_local"]})' if it["scheduled_at_local"] else f'"{it["title"]}"'
+            for it in items[:15]
+        )
+        summary = f"Listed {len(items)} reminder(s): {preview}."
+    else:
+        summary = "Listed 0 reminder(s)."
+    return {"summary": summary, "items": items, "target_summary": f"{len(items)} reminder(s)"}
 
 
-async def run_list_alarms(db: AsyncSession, profile_id: str, args: dict[str, Any]) -> dict[str, Any]:
+async def run_list_alarms(
+    db: AsyncSession,
+    profile_id: str,
+    args: dict[str, Any],
+    profile: Optional[Profile] = None,
+) -> dict[str, Any]:
+    default_tz = getattr(profile, "quiet_hours_timezone", "UTC") or "UTC"
     stmt = select(Alarm).where(Alarm.profile_id == profile_id, Alarm.is_deleted.is_(False))
     if args.get("enabled_only"):
         stmt = stmt.where(Alarm.enabled.is_(True))
-    stmt = stmt.order_by(Alarm.scheduled_at.asc()).limit(int(args.get("limit", 20)))
+    stmt = stmt.order_by(Alarm.scheduled_at.asc()).limit(int(args.get("limit", 50)))
     rows = (await db.execute(stmt)).scalars().all()
-    items = [
-        {
-            "id": r.id,
-            "label": r.label,
-            "time_of_day": r.time_of_day,
-            "enabled": r.enabled,
-            "status": r.status,
-            "scheduled_at": r.scheduled_at.isoformat() if r.scheduled_at else None,
-        }
-        for r in rows
-    ]
-    return {"summary": f"Listed {len(items)} alarm(s).", "items": items, "target_summary": f"{len(items)} alarm(s)"}
+    items = []
+    for r in rows:
+        row_tz = getattr(r, "timezone", None) or default_tz
+        sched_local = _format_human_local_datetime(r.scheduled_at, row_tz)
+        items.append(
+            {
+                "id": r.id,
+                "label": r.label,
+                "time_of_day": r.time_of_day,
+                "enabled": r.enabled,
+                "status": r.status,
+                "scheduled_at": r.scheduled_at.isoformat() if r.scheduled_at else None,
+                "scheduled_at_local": sched_local,
+            }
+        )
+    if items:
+        preview = "; ".join(
+            f'"{it["label"]}" ({it["scheduled_at_local"] or it["time_of_day"]})'
+            for it in items[:15]
+        )
+        summary = f"Listed {len(items)} alarm(s): {preview}."
+    else:
+        summary = "Listed 0 alarm(s)."
+    return {"summary": summary, "items": items, "target_summary": f"{len(items)} alarm(s)"}
 
 
 async def run_search_memories(
@@ -131,6 +207,7 @@ async def run_create_task(
     tz_name: str = "UTC",
 ) -> dict[str, Any]:
     due_dt = _parse_iso_utc(args["due_at"], tz_name=tz_name) if args.get("due_at") else None
+    due_local = _format_human_local_datetime(due_dt, tz_name)
     task = Task(
         id=generate_uuid(),
         profile_id=profile_id,
@@ -143,9 +220,21 @@ async def run_create_task(
     )
     db.add(task)
     await db.flush()
+    summary = (
+        f'Created task "{task.title}" (due {due_local}).'
+        if due_local
+        else f'Created task "{task.title}".'
+    )
     return {
-        "summary": f'Created task "{task.title}".',
-        "task": {"id": task.id, "title": task.title, "status": task.status, "priority": task.priority},
+        "summary": summary,
+        "task": {
+            "id": task.id,
+            "title": task.title,
+            "status": task.status,
+            "priority": task.priority,
+            "due_at": due_dt.isoformat() if due_dt else None,
+            "due_at_local": due_local,
+        },
         "target_summary": task.title,
     }
 
@@ -211,9 +300,15 @@ async def run_create_reminder(
     quiet_note = ""
     if profile is not None and is_within_quiet_hours(profile, scheduled_at) and not rem.bypass_quiet_hours:
         quiet_note = " (will respect Quiet Hours)"
+    scheduled_local = _format_human_local_datetime(scheduled_at, tz_name) or scheduled_at.isoformat()
     return {
-        "summary": f'Scheduled reminder "{rem.title}" for {scheduled_at.isoformat()}{quiet_note}.',
-        "reminder": {"id": rem.id, "title": rem.title, "scheduled_at": scheduled_at.isoformat()},
+        "summary": f'Scheduled reminder "{rem.title}" for {scheduled_local}{quiet_note}.',
+        "reminder": {
+            "id": rem.id,
+            "title": rem.title,
+            "scheduled_at": scheduled_at.isoformat(),
+            "scheduled_at_local": scheduled_local,
+        },
         "target_summary": rem.title,
     }
 
@@ -245,7 +340,7 @@ async def run_create_alarm(
     next_dt = compute_next_occurrence(
         time_of_day=args["time_of_day"],
         recurrence_days=days,
-        timezone_name=tz_name,
+        tz_name=tz_name,
         after_utc=utc_now(),
     )
     alarm = Alarm(
@@ -264,9 +359,15 @@ async def run_create_alarm(
     db.add(alarm)
     await db.flush()
     quiet_status = "bypasses quiet hours by default" if alarm.bypass_quiet_hours else "respects quiet hours"
+    scheduled_local = _format_human_local_datetime(next_dt, tz_name)
     return {
         "summary": f'Created alarm "{alarm.label}" at {alarm.time_of_day} ({quiet_status}).',
-        "alarm": {"id": alarm.id, "label": alarm.label, "scheduled_at": next_dt.isoformat()},
+        "alarm": {
+            "id": alarm.id,
+            "label": alarm.label,
+            "scheduled_at": next_dt.isoformat(),
+            "scheduled_at_local": scheduled_local,
+        },
         "target_summary": alarm.label,
     }
 

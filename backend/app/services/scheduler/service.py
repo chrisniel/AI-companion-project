@@ -445,6 +445,7 @@ class SchedulerService:
         now_utc: datetime,
         cutoff_utc: Optional[datetime],
         missed_only: bool,
+        defer_non_bypass_routines: bool = False,
     ) -> List[NotificationEvent]:
         """Shared evaluation helper for live due triggers and missed-event catch-up."""
         profiles = await self._load_active_profiles_map()
@@ -563,6 +564,8 @@ class SchedulerService:
             target = as_utc(routine.next_run_at)
             if target is None or target > now_utc:
                 continue
+            if defer_non_bypass_routines and not routine.bypass_quiet_hours:
+                continue
             is_missed = cutoff_utc is not None and target < cutoff_utc
             if missed_only and not is_missed:
                 continue
@@ -677,6 +680,7 @@ class SchedulerService:
         grace_seconds: Optional[int] = None,
         *,
         sweep_memories: bool = True,
+        defer_non_bypass_routines: bool = False,
         commit: bool = True,
     ) -> List[NotificationEvent]:
         """Run one deterministic scheduler pass (missed catch-up + live due + optional memory sweep)."""
@@ -688,6 +692,7 @@ class SchedulerService:
             now_utc=now_utc,
             cutoff_utc=cutoff_utc,
             missed_only=False,
+            defer_non_bypass_routines=defer_non_bypass_routines,
         )
         if sweep_memories:
             await self.sweep_expired_memories(now=now_utc, commit=False)
@@ -747,13 +752,21 @@ async def run_periodic_scheduler(
     while True:
         try:
             await asyncio.sleep(interval_seconds)
+            from app.services.resource_governor import resource_governor
+
+            defer_bg = resource_governor.should_defer_background_work
             elapsed_since_memory_sweep += interval_seconds
-            should_sweep_memories = elapsed_since_memory_sweep >= memory_sweep_interval_seconds
+            should_sweep_memories = (
+                not defer_bg and elapsed_since_memory_sweep >= memory_sweep_interval_seconds
+            )
             if should_sweep_memories:
                 elapsed_since_memory_sweep = 0.0
             async with session_factory() as session:
                 svc = SchedulerService(session)
-                await svc.run_tick(sweep_memories=should_sweep_memories)
+                await svc.run_tick(
+                    sweep_memories=should_sweep_memories,
+                    defer_non_bypass_routines=defer_bg,
+                )
         except asyncio.CancelledError:
             break
         except Exception as exc:

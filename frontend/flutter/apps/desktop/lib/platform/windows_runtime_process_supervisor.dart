@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:companion_core/companion_core.dart';
+import 'desktop_process_inspector.dart';
 import 'process_launcher_adapter.dart';
 
 /// Native Windows runtime process supervisor.
@@ -9,13 +10,22 @@ import 'process_launcher_adapter.dart';
 /// Manages kernel-level file locking (`RandomAccessFile.lock(FileLock.exclusive)`),
 /// safe descriptor write-through, bounded port polling, detached background process
 /// launching with rotating file logging, and non-destructive Windows process table
-/// queries (`tasklist`). Never attempts destructive PID termination.
+/// queries (`DesktopProcessInspector` native Win32 with `tasklist`/PowerShell fallback).
+/// Never attempts destructive PID termination.
 class WindowsRuntimeProcessSupervisor {
   final ProcessLauncherAdapter _launcher;
+  final DesktopProcessInspector? _processInspector;
 
   WindowsRuntimeProcessSupervisor({
     ProcessLauncherAdapter launcher = const DefaultProcessLauncherAdapter(),
-  }) : _launcher = launcher;
+    DesktopProcessInspector? processInspector,
+  })  : _launcher = launcher,
+        _processInspector = processInspector ??
+            ((launcher is DefaultProcessLauncherAdapter &&
+                    Platform.isWindows &&
+                    !Platform.environment.containsKey('FLUTTER_TEST'))
+                ? const WindowsProcessInspector()
+                : null);
 
   /// Probes whether a TCP port is listening on [host].
   ///
@@ -178,6 +188,16 @@ class WindowsRuntimeProcessSupervisor {
     required String expectedExecutable,
   }) async {
     if (pid <= 0) return false;
+    final inspector = _processInspector;
+    if (inspector != null) {
+      final nativeMatch = await inspector.isProcessAliveAndMatching(
+        pid: pid,
+        expectedExecutable: expectedExecutable,
+      );
+      if (nativeMatch != null) {
+        return nativeMatch;
+      }
+    }
     try {
       final result = await _launcher.run(
         'tasklist',
@@ -331,8 +351,37 @@ class WindowsRuntimeProcessSupervisor {
       );
     }
 
+    final exeBase = expectedExecutable.split(RegExp(r'[\\/]')).last.toLowerCase();
+    final inspector = _processInspector;
+    if (inspector != null) {
+      final batch = await inspector.discoverCandidateProcesses(
+        targetExecutableBase: exeBase,
+      );
+      if (batch != null && !batch.needsFallback) {
+        final nativeCandidates = <DiscoveredProcessIdentity>[];
+        for (final raw in batch.candidates) {
+          if (raw.pid <= 0 || raw.pid == pid) continue;
+          if (!matchesExactPort(raw.commandLine, port)) continue;
+          final creationTime = DateTime.tryParse(raw.creationDate);
+          nativeCandidates.add(
+            DiscoveredProcessIdentity(
+              pid: raw.pid,
+              executablePath: raw.executablePath,
+              commandLine: raw.commandLine,
+              creationTime: creationTime ??
+                  DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+            ),
+          );
+        }
+        return _evaluateCandidateIdentities(
+          candidates: nativeCandidates,
+          port: port,
+          expectedExecutable: expectedExecutable,
+        );
+      }
+    }
+
     try {
-      final exeBase = expectedExecutable.split(RegExp(r'[\\/]')).last.toLowerCase();
       final String filter;
       if (exeBase == 'python.exe' || exeBase == 'pythonw.exe') {
         filter = "Name LIKE 'python%'";
@@ -475,53 +524,10 @@ class WindowsRuntimeProcessSupervisor {
         );
       }
 
-      if (candidates.isEmpty) {
-        return const ProcessDiscoveryResult(
-          status: ProcessDiscoveryStatus.noProcess,
-        );
-      }
-
-      if (candidates.length > 1) {
-        return ProcessDiscoveryResult(
-          status: ProcessDiscoveryStatus.multipleCandidates,
-          candidates: candidates,
-          diagnostic: 'Found ${candidates.length} candidate processes configured for port $port',
-        );
-      }
-
-      final candidate = candidates.first;
-
-      // 1. Creation time must be genuinely present and valid
-      if (candidate.creationTime.millisecondsSinceEpoch == 0) {
-        return ProcessDiscoveryResult(
-          status: ProcessDiscoveryStatus.unverifiedCandidate,
-          candidates: candidates,
-          diagnostic: 'Candidate PID ${candidate.pid} is missing valid OS creation-time evidence',
-        );
-      }
-
-      // 2. Command line must contain companion application module
-      if (!isCompanionRuntimeCommandLine(candidate.commandLine, expectedPort: port)) {
-        return ProcessDiscoveryResult(
-          status: ProcessDiscoveryStatus.unverifiedCandidate,
-          candidates: candidates,
-          diagnostic: 'Candidate PID ${candidate.pid} is running foreign or non-companion application module',
-        );
-      }
-
-      // 3. Executable path must match expected executable provenance
-      if (!isExecutablePathMatch(candidate.executablePath, expectedExecutable)) {
-        return ProcessDiscoveryResult(
-          status: ProcessDiscoveryStatus.unverifiedCandidate,
-          candidates: candidates,
-          diagnostic: 'Candidate PID ${candidate.pid} executable (${candidate.executablePath}) does not match expected executable ($expectedExecutable)',
-        );
-      }
-
-      return ProcessDiscoveryResult(
-        status: ProcessDiscoveryStatus.verified,
-        verifiedProcess: candidate,
+      return _evaluateCandidateIdentities(
         candidates: candidates,
+        port: port,
+        expectedExecutable: expectedExecutable,
       );
     } catch (e) {
       return ProcessDiscoveryResult(
@@ -529,6 +535,61 @@ class WindowsRuntimeProcessSupervisor {
         diagnostic: 'Exception during process inspection: $e',
       );
     }
+  }
+
+  ProcessDiscoveryResult _evaluateCandidateIdentities({
+    required List<DiscoveredProcessIdentity> candidates,
+    required int port,
+    required String expectedExecutable,
+  }) {
+    if (candidates.isEmpty) {
+      return const ProcessDiscoveryResult(
+        status: ProcessDiscoveryStatus.noProcess,
+      );
+    }
+
+    if (candidates.length > 1) {
+      return ProcessDiscoveryResult(
+        status: ProcessDiscoveryStatus.multipleCandidates,
+        candidates: candidates,
+        diagnostic: 'Found ${candidates.length} candidate processes configured for port $port',
+      );
+    }
+
+    final candidate = candidates.first;
+
+    // 1. Creation time must be genuinely present and valid
+    if (candidate.creationTime.millisecondsSinceEpoch == 0) {
+      return ProcessDiscoveryResult(
+        status: ProcessDiscoveryStatus.unverifiedCandidate,
+        candidates: candidates,
+        diagnostic: 'Candidate PID ${candidate.pid} is missing valid OS creation-time evidence',
+      );
+    }
+
+    // 2. Command line must contain companion application module
+    if (!isCompanionRuntimeCommandLine(candidate.commandLine, expectedPort: port)) {
+      return ProcessDiscoveryResult(
+        status: ProcessDiscoveryStatus.unverifiedCandidate,
+        candidates: candidates,
+        diagnostic: 'Candidate PID ${candidate.pid} is running foreign or non-companion application module',
+      );
+    }
+
+    // 3. Executable path must match expected executable provenance
+    if (!isExecutablePathMatch(candidate.executablePath, expectedExecutable)) {
+      return ProcessDiscoveryResult(
+        status: ProcessDiscoveryStatus.unverifiedCandidate,
+        candidates: candidates,
+        diagnostic: 'Candidate PID ${candidate.pid} executable (${candidate.executablePath}) does not match expected executable ($expectedExecutable)',
+      );
+    }
+
+    return ProcessDiscoveryResult(
+      status: ProcessDiscoveryStatus.verified,
+      verifiedProcess: candidate,
+      candidates: candidates,
+    );
   }
 
   /// Finds an active verified runtime process running on [port] and matching [expectedExecutable].

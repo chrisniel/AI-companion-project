@@ -104,7 +104,7 @@ Verified in `backend/app/core/storage.py` and `backend/migrations/`:
   - `inspect_legacy_candidate()` verifies candidate SQLite database files, checksums, and schema versions.
   - `assess_migration_preflight()` inspects potential legacy databases and guards against ambiguous multi-candidate states.
   - `execute_migration()` copies legacy SQLite data into canonical storage, verifies integrity, promotes it atomically, and attempts to preserve an additional backup copy in `BACKUP_DIR`; failure of that extra copy is logged (while the original legacy source file remains untouched).
-  - `prepare_database_schema()` executes Alembic upgrades on the canonical database.
+  - `prepare_database_schema()` validates non-zero file size (`st_size > 0`), runs `inspect_legacy_candidate()` integrity/version checks, and short-circuits Alembic `ScriptDirectory` scanning via AST-based `_resolve_single_alembic_head_fast()` when an existing linear-head DB already matches head (falling back to full Alembic upgrade whenever `inspect_legacy_candidate()`, revision parity, or single-head checks deviate).
 
 ---
 

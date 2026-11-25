@@ -863,6 +863,114 @@ def execute_migration(
 from app.db.backup import create_pre_migration_backup, SQLiteBackupError
 
 
+def _extract_migration_revision_info(file_path: Path) -> Optional[tuple[str, Optional[str]]]:
+    """Safely extract literal (revision, down_revision) from a single Alembic script via AST."""
+    import ast
+
+    try:
+        tree = ast.parse(file_path.read_text(encoding="utf-8"), filename=str(file_path))
+    except Exception:
+        return None
+
+    revision_found = False
+    revision_val: Optional[str] = None
+    down_found = False
+    down_val: Optional[str] = None
+
+    for node in tree.body:
+        target_name: Optional[str] = None
+        value_node = None
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            target_name = node.targets[0].id
+            value_node = node.value
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            target_name = node.target.id
+            value_node = node.value
+        else:
+            continue
+
+        if target_name == "revision" and value_node is not None:
+            if isinstance(value_node, ast.Constant) and isinstance(value_node.value, str) and value_node.value.strip():
+                revision_found = True
+                revision_val = value_node.value.strip()
+            else:
+                return None
+        elif target_name == "down_revision" and value_node is not None:
+            if isinstance(value_node, ast.Constant):
+                if value_node.value is None:
+                    down_found = True
+                    down_val = None
+                elif isinstance(value_node.value, str) and value_node.value.strip():
+                    down_found = True
+                    down_val = value_node.value.strip()
+                else:
+                    return None
+            else:
+                # Tuples / branches / dynamic expressions require full ScriptDirectory resolution.
+                return None
+
+    if not revision_found or revision_val is None or not down_found:
+        return None
+    return revision_val, down_val
+
+
+def _resolve_single_alembic_head_fast(migrations_dir: Path) -> Optional[str]:
+    """Resolve unambiguous linear Alembic head without importing alembic.
+
+    Returns None on missing scripts directory, branched/merged revisions, duplicate
+    revisions, or unparseable definitions so callers fail closed to ScriptDirectory.
+    """
+    versions_dir = migrations_dir / "versions"
+    if not versions_dir.is_dir():
+        return None
+
+    script_files = sorted(
+        p for p in versions_dir.glob("*.py")
+        if p.is_file() and p.name != "__init__.py"
+    )
+    if not script_files:
+        return None
+
+    revisions: dict[str, Optional[str]] = {}
+    referenced_parents: set[str] = set()
+    roots = 0
+
+    for script_file in script_files:
+        parsed = _extract_migration_revision_info(script_file)
+        if parsed is None:
+            return None
+        rev, down_rev = parsed
+        if rev in revisions:
+            return None
+        revisions[rev] = down_rev
+        if down_rev is None:
+            roots += 1
+        else:
+            referenced_parents.add(down_rev)
+
+    if roots != 1:
+        return None
+    if not referenced_parents.issubset(revisions.keys()):
+        return None
+
+    heads = [rev for rev in revisions if rev not in referenced_parents]
+    if len(heads) != 1:
+        return None
+
+    # Walk parent chain from the sole head to ensure acyclicity and full connectivity.
+    visited: set[str] = set()
+    curr: Optional[str] = heads[0]
+    while curr is not None:
+        if curr in visited or curr not in revisions:
+            return None
+        visited.add(curr)
+        curr = revisions[curr]
+
+    if len(visited) != len(revisions):
+        return None
+    return heads[0]
+
+
 def prepare_database_schema(
     canonical_db_path: Path,
     alembic_ini_path: Optional[Path] = None,
@@ -875,15 +983,11 @@ def prepare_database_schema(
     Application logging remains caller-owned during this programmatic upgrade.
     If the canonical database exists with older data and requires an upgrade,
     a verified WAL-consistent pre-migration backup is taken prior to running upgrade.
+    When an existing canonical DB passes integrity checks and already matches the
+    single linear migration head, returns immediately without invoking Alembic.
     Returns the current Alembic revision string.
     """
-    import concurrent.futures
-    from alembic.config import Config
-    from alembic import command
-    from alembic.script import ScriptDirectory
-
     canonical_db_path.parent.mkdir(parents=True, exist_ok=True)
-    db_url = f"sqlite+aiosqlite:///{canonical_db_path.resolve().as_posix()}"
 
     ini_path = alembic_ini_path
     if ini_path is None:
@@ -892,15 +996,8 @@ def prepare_database_schema(
     if not ini_path.exists():
         raise StorageError(f"Alembic configuration file not found at {ini_path}")
 
-    cfg = Config(str(ini_path))
-    cfg.attributes["application_owns_logging"] = True
     migrations_dir = ini_path.parent / "migrations"
-    cfg.set_main_option("script_location", str(migrations_dir.resolve()))
-    cfg.set_main_option("sqlalchemy.url", db_url)
-
-    # Check if database exists and requires an upgrade
-    script = ScriptDirectory.from_config(cfg)
-    head_rev = script.get_current_head()
+    inspection: Optional[CandidateInspectionResult] = None
 
     if canonical_db_path.exists():
         # Fail closed: never back up, upgrade or otherwise mutate an existing invalid database.
@@ -913,16 +1010,37 @@ def prepare_database_schema(
             raise StorageError(
                 f"Refusing to upgrade existing database at {canonical_db_path}: failed validation ({inspection.error})."
             )
-        if inspection.alembic_version != head_rev:
-            target_backup_dir = backup_dir or (canonical_db_path.parent.parent / "backups")
+        fast_head = _resolve_single_alembic_head_fast(migrations_dir)
+        if fast_head is not None and inspection.alembic_version == fast_head:
             logger.info(
-                f"Existing database at {canonical_db_path} (rev={inspection.alembic_version}) requires upgrade to head ({head_rev}). "
-                f"Taking pre-migration backup to {target_backup_dir}..."
+                f"Canonical database at {canonical_db_path} already verified at Alembic head: {fast_head}"
             )
-            try:
-                create_pre_migration_backup(canonical_db_path, backup_dir=target_backup_dir)
-            except SQLiteBackupError as exc:
-                raise StorageError(f"Pre-migration backup failed for {canonical_db_path}: {exc}") from exc
+            return fast_head
+
+    import concurrent.futures
+    from alembic.config import Config
+    from alembic import command
+    from alembic.script import ScriptDirectory
+
+    db_url = f"sqlite+aiosqlite:///{canonical_db_path.resolve().as_posix()}"
+    cfg = Config(str(ini_path))
+    cfg.attributes["application_owns_logging"] = True
+    cfg.set_main_option("script_location", str(migrations_dir.resolve()))
+    cfg.set_main_option("sqlalchemy.url", db_url)
+
+    script = ScriptDirectory.from_config(cfg)
+    head_rev = script.get_current_head()
+
+    if inspection is not None and inspection.alembic_version != head_rev:
+        target_backup_dir = backup_dir or (canonical_db_path.parent.parent / "backups")
+        logger.info(
+            f"Existing database at {canonical_db_path} (rev={inspection.alembic_version}) requires upgrade to head ({head_rev}). "
+            f"Taking pre-migration backup to {target_backup_dir}..."
+        )
+        try:
+            create_pre_migration_backup(canonical_db_path, backup_dir=target_backup_dir)
+        except SQLiteBackupError as exc:
+            raise StorageError(f"Pre-migration backup failed for {canonical_db_path}: {exc}") from exc
 
     def _run_upgrade():
         command.upgrade(cfg, "head")
@@ -934,13 +1052,13 @@ def prepare_database_schema(
         except Exception as exc:
             raise StorageError(f"Failed to apply Alembic migrations to {canonical_db_path}: {exc}") from exc
 
-    inspection = inspect_legacy_candidate(canonical_db_path)
-    if not inspection.is_valid or not inspection.integrity_ok:
+    post_inspection = inspect_legacy_candidate(canonical_db_path)
+    if not post_inspection.is_valid or not post_inspection.integrity_ok:
         raise StorageError(
-            f"Canonical database at {canonical_db_path} failed integrity checks after migration: {inspection.error}"
+            f"Canonical database at {canonical_db_path} failed integrity checks after migration: {post_inspection.error}"
         )
-    if not inspection.alembic_version:
+    if not post_inspection.alembic_version:
         raise StorageError(f"Canonical database at {canonical_db_path} missing alembic_version after upgrade.")
 
-    logger.info(f"Canonical database at {canonical_db_path} successfully upgraded to Alembic head: {inspection.alembic_version}")
-    return inspection.alembic_version
+    logger.info(f"Canonical database at {canonical_db_path} successfully upgraded to Alembic head: {post_inspection.alembic_version}")
+    return post_inspection.alembic_version

@@ -94,11 +94,11 @@ async def _dispatch_narrow_adapter(
     if tool_name == "web_fetch":
         return await fetch_web_page(url=validated_args["url"])
     if tool_name == "list_tasks":
-        return await prod_adapters.run_list_tasks(db, pid, validated_args)
+        return await prod_adapters.run_list_tasks(db, pid, validated_args, profile=profile)
     if tool_name == "list_reminders":
-        return await prod_adapters.run_list_reminders(db, pid, validated_args)
+        return await prod_adapters.run_list_reminders(db, pid, validated_args, profile=profile)
     if tool_name == "list_alarms":
-        return await prod_adapters.run_list_alarms(db, pid, validated_args)
+        return await prod_adapters.run_list_alarms(db, pid, validated_args, profile=profile)
     if tool_name == "search_memories":
         return await prod_adapters.run_search_memories(db, profile_session, validated_args)
     if tool_name == "create_task":

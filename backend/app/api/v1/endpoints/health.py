@@ -31,6 +31,8 @@ from app.schemas.health import (
     AutostartUpdateRequest,
     HealthResponse,
     LibraryRootUpdateRequest,
+    ResourcePolicyStatusOut,
+    ResourcePolicyUpdateRequest,
     StorageRootOut,
     StorageRootsResponse,
     SystemShutdownRequest,
@@ -42,6 +44,7 @@ from app.services.profile_purge_service import (
     ProfilePurgeService,
     PurgeMaintenanceResult,
 )
+from app.services.resource_governor import resource_governor
 
 public_health_router = APIRouter(tags=["Health"])
 system_router = APIRouter(tags=["System Status"])
@@ -335,3 +338,31 @@ async def update_system_autostart(
         )
     except AutostartConfigurationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from None
+
+
+@system_router.get(
+    "/system/resources",
+    response_model=ResourcePolicyStatusOut,
+    summary="Inspect Host Resource Governance & Auto Gaming Status (Host Admin)",
+)
+async def get_system_resources(
+    _: str = Depends(require_host_admin),
+) -> ResourcePolicyStatusOut:
+    """Return live host resource governance mode, gaming detection, and truthful OS capacity."""
+    return await resource_governor.get_status()
+
+
+@system_router.put(
+    "/system/resources",
+    response_model=ResourcePolicyStatusOut,
+    summary="Update Host Resource Governance & Auto Gaming Policy (Host Admin)",
+)
+async def update_system_resources(
+    request: ResourcePolicyUpdateRequest,
+    _: str = Depends(require_host_admin),
+) -> ResourcePolicyStatusOut:
+    """Persist validated resource governance settings and apply immediately without blocking."""
+    try:
+        return await resource_governor.update_policy(request)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
