@@ -289,6 +289,19 @@ def preprocess_text_for_tts(text: str) -> str:
     cleaned = _MD_LINK_RE.sub(r"\1", cleaned)
     cleaned = _URL_RE.sub("", cleaned)
     cleaned = cleaned.replace("```", " ").replace("`", "")
+
+    # Preserve bullet/list item boundaries as natural sentence pauses before flattening newlines.
+    formatted_lines: list[str] = []
+    for raw_line in cleaned.splitlines():
+        line = re.sub(r"^\s*(?:[-*•▪▸►]+|\d+[.)])\s+", "", raw_line).strip()
+        if not line:
+            continue
+        if re.search(r"[A-Za-z0-9]", line) and not re.search(r"[.!?;:,—–]\s*$", line):
+            line = f"{line}."
+        formatted_lines.append(line)
+    if formatted_lines:
+        cleaned = " ".join(formatted_lines)
+
     cleaned = re.sub(r"[*_~]+", "", cleaned)
 
     def _format_iso_datetime(m: re.Match[str]) -> str:
@@ -380,10 +393,11 @@ def preprocess_text_for_tts(text: str) -> str:
         r"\1 to \2",
         cleaned,
     )
-    # Normalize prose em/en-dashes to natural comma pauses before espeak-ng splits clauses on '—'.
+    # Normalize prose em/en-dashes and spaced ASCII hyphens to natural comma pauses before espeak-ng splits clauses.
     cleaned = re.sub(r"(?<=[,.;:!?])\s*[—–]+\s*", " ", cleaned)
     cleaned = re.sub(r"\s*[—–]+\s*(?=[.!?]|$)", "", cleaned)
     cleaned = re.sub(r"\s*[—–]+\s*", ", ", cleaned)
+    cleaned = re.sub(r"\s+-\s+", ", ", cleaned)
     cleaned = re.sub(r"(\d+(?:\.\d+)?)\s*%", r"\1 percent", cleaned)
     cleaned = re.sub(r"(\d+)\.(\d+)", r"\1 point \2", cleaned)
     cleaned = re.sub(r"\s*(?:->|=>|[→⇒➜➔⟶])\s*", ", ", cleaned)

@@ -1349,12 +1349,6 @@ async def test_gemma_style_schedule_query_triggers_prearmed_list_fallback_and_ex
         def _gemma_no_tool_call_stream(messages: list[ChatMessage], **kwargs):
             nonlocal round_no
             round_no += 1
-            if round_no == 1:
-                async def _hallucinated_r0():
-                    yield "December 7th: Final App Testing"
-
-                return GenerationStream(_hallucinated_r0(), meta={"finish_reason": "stop", "tool_calls": []})
-
             for m in messages:
                 if getattr(m, "role", None) == "tool" and isinstance(m.content, str):
                     captured_round1_tool_payloads.append(m.content)
@@ -1388,7 +1382,7 @@ async def test_gemma_style_schedule_query_triggers_prearmed_list_fallback_and_ex
 
         events = _parse_sse_events(frames)
         token_text = "".join(e.get("content", "") for e in events if e.get("type") == "token")
-        assert "Final App Testing" not in token_text
+        assert round_no == 1, "Instant local schedule prefetch should skip wasted Round-0 LLM generation"
         assert "Wedding" in token_text
 
         result_tools = {e.get("tool_name") for e in events if e.get("type") == "tool_result"}

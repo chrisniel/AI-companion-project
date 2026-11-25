@@ -576,6 +576,23 @@ void main() {
       );
       await ctrl.stopSpeaking();
 
+      // 4b. Unpunctuated markdown bullets receive trailing periods and follow-on chunks stay <= 160 chars
+      synthesized.clear();
+      await ctrl.speakMessage(
+        messageId: 'msg-bullets-1',
+        text: "Okay, let's check your calendar!\n"
+            '• December 7th: Task - "Final App Testing" – Estimated Duration: 3 hours\n'
+            '• December 8th: Alarm - "Morning Routine" – 7:00 AM\n'
+            '• December 15th: Reminder – "UI/UX Review" - 2:00 PM',
+      );
+      expect(synthesized.length, greaterThanOrEqualTo(3));
+      expect(synthesized.first, equals("Okay, let's check your calendar!"));
+      for (final chunk in synthesized.skip(1)) {
+        expect(chunk.length, lessThanOrEqualTo(160));
+        expect(chunk.endsWith('.'), isTrue);
+      }
+      await ctrl.stopSpeaking();
+
       // 5. Tap-to-Send Live Voice buffers audio until commitLiveUtterance
       final fakeWs = _FakeWsTransport();
       final tapCtrl = DesktopVoiceController(

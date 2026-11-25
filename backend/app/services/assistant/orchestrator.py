@@ -564,6 +564,9 @@ def _extract_explicit_schedule_list_tools(user_text: str, allowed_names: set[str
     return selected
 
 
+_INSTANT_LOCAL_PREFETCH_TOOLS = frozenset({"list_reminders", "list_tasks", "list_alarms"})
+
+
 def _build_pre_armed_turn_fallbacks(
     tool_defs: Optional[list[dict[str, Any]]],
     user_text: str,
@@ -1808,52 +1811,67 @@ async def orchestrate_chat_stream(
             local_now=local_now,
             default_weather_location=_resolve_default_weather_location(tz_name),
         )
+        instant_local_prefetch = bool(
+            pre_armed_fallbacks
+            and _BROAD_SCHEDULE_QUERY_RE.search(user_text or "")
+            and all(
+                tc.get("function", {}).get("name") in _INSTANT_LOCAL_PREFETCH_TOOLS
+                for tc in pre_armed_fallbacks
+            )
+        )
 
         for round_idx in range(MAX_TOOL_ROUNDS + 1):
-            round_tools = tool_defs if round_idx < MAX_TOOL_ROUNDS else None
+            round_tools = (
+                None
+                if (instant_local_prefetch and round_idx == 1)
+                else (tool_defs if round_idx < MAX_TOOL_ROUNDS else None)
+            )
             pass_state: dict[str, Any] = {}
             round_text = ""
             round_tool_reserve = effective_tool_reserve if round_tools else 0
             round_prompt_tokens = sum(_estimate_tokens(m.content) for m in working_messages) + round_tool_reserve
             round_max_tokens = min(1024, max(64, context_capacity - round_prompt_tokens))
-            buffer_round0 = bool(round_idx == 0 and pre_armed_fallbacks and round_tools)
-            buffered_round0: list[tuple[str, str]] = []
-
-            async for token, sse_frame in _stream_guarded_sse_pass(
-                db=db,
-                profile_session=profile_session,
-                conversation_id=conversation_id,
-                prepared_turn=prepared_turn,
-                provider=provider,
-                messages=working_messages,
-                max_tokens=round_max_tokens,
-                state=pass_state,
-                existing_text=full_response_text,
-                tools=round_tools,
-            ):
-                if buffer_round0:
-                    buffered_round0.append((token, sse_frame))
-                else:
-                    round_text += token
-                    full_response_text += token
-                    yield sse_frame
-
-            await _require_prepared_turn(db, profile_session, conversation_id, prepared_turn)
-            final_pass_state = pass_state
-            last_round_messages = list(working_messages)
-            round_tool_calls = pass_state.get("tool_calls") or []
-
-            if round_idx == 0 and not round_tool_calls and not turn_receipts and pre_armed_fallbacks:
-                # Discard ungrounded Round-0 refusal/roleplay before running the deterministic Risk 0 lookup.
-                buffered_round0.clear()
-                round_text = ""
-                full_response_text = ""
+            if round_idx == 0 and instant_local_prefetch:
                 round_tool_calls = pre_armed_fallbacks
-            elif buffered_round0:
-                for tok, frame in buffered_round0:
-                    round_text += tok
-                    full_response_text += tok
-                    yield frame
+            else:
+                buffer_round0 = bool(round_idx == 0 and pre_armed_fallbacks and round_tools)
+                buffered_round0: list[tuple[str, str]] = []
+
+                async for token, sse_frame in _stream_guarded_sse_pass(
+                    db=db,
+                    profile_session=profile_session,
+                    conversation_id=conversation_id,
+                    prepared_turn=prepared_turn,
+                    provider=provider,
+                    messages=working_messages,
+                    max_tokens=round_max_tokens,
+                    state=pass_state,
+                    existing_text=full_response_text,
+                    tools=round_tools,
+                ):
+                    if buffer_round0:
+                        buffered_round0.append((token, sse_frame))
+                    else:
+                        round_text += token
+                        full_response_text += token
+                        yield sse_frame
+
+                await _require_prepared_turn(db, profile_session, conversation_id, prepared_turn)
+                final_pass_state = pass_state
+                last_round_messages = list(working_messages)
+                round_tool_calls = pass_state.get("tool_calls") or []
+
+                if round_idx == 0 and not round_tool_calls and not turn_receipts and pre_armed_fallbacks:
+                    # Discard ungrounded Round-0 refusal/roleplay before running the deterministic Risk 0 lookup.
+                    buffered_round0.clear()
+                    round_text = ""
+                    full_response_text = ""
+                    round_tool_calls = pre_armed_fallbacks
+                elif buffered_round0:
+                    for tok, frame in buffered_round0:
+                        round_text += tok
+                        full_response_text += tok
+                        yield frame
 
             if not round_tool_calls or round_idx >= MAX_TOOL_ROUNDS:
                 break

@@ -208,6 +208,86 @@ def _translate_messages(messages: List[ChatMessage]) -> list[dict[str, Any]]:
     return wire_messages
 
 
+def _merge_wire_content(existing: Any, extra_text: str) -> Any:
+    """Append text safely onto either string or multimodal list wire content."""
+    addition = extra_text.strip()
+    if not addition:
+        return existing
+    if isinstance(existing, list):
+        return [*existing, {"type": "text", "text": addition}]
+    base = str(existing or "").strip()
+    return f"{base}\n\n{addition}" if base else addition
+
+
+def _flatten_tool_messages_for_strict_template(
+    wire_messages: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Collapse OpenAI tool_calls/tool messages into strictly alternating user/assistant turns.
+
+    Models whose GGUF Jinja templates enforce strict user/assistant alternation without
+    native `role: "tool"` support (such as Gemma 3) reject raw OpenAI tool histories with HTTP 400.
+    """
+    system_parts: list[str] = []
+    turns: list[dict[str, Any]] = []
+    folded_any_tool = False
+
+    def _append_turn(role: str, content: Any) -> None:
+        if turns and turns[-1]["role"] == role:
+            if isinstance(content, list):
+                existing = turns[-1]["content"]
+                if isinstance(existing, list):
+                    turns[-1]["content"] = [*existing, *content]
+                else:
+                    turns[-1]["content"] = [
+                        {"type": "text", "text": str(existing or "")},
+                        *content,
+                    ] if str(existing or "").strip() else list(content)
+            else:
+                turns[-1]["content"] = _merge_wire_content(
+                    turns[-1]["content"], str(content or "")
+                )
+        else:
+            turns.append({"role": role, "content": content})
+
+    for m in wire_messages:
+        role = str(m.get("role") or "user").strip().lower()
+        content = m.get("content")
+        if role == "system":
+            if isinstance(content, str) and content.strip():
+                system_parts.append(content.strip())
+            continue
+        if role == "tool":
+            folded_any_tool = True
+            tool_name = str(m.get("name") or "tool")
+            tool_text = f"[Verified Tool Result ({tool_name})]: {content or ''}"
+            _append_turn("user", tool_text)
+            continue
+        if role == "assistant":
+            has_text = (
+                bool(content.strip())
+                if isinstance(content, str)
+                else bool(content)
+            )
+            if m.get("tool_calls") and not has_text:
+                # Drop empty assistant tool_calls stub before appending folded user tool results.
+                continue
+            _append_turn("assistant", content if content is not None else "")
+            continue
+        _append_turn("user", content if content is not None else "")
+
+    if folded_any_tool and turns and turns[-1]["role"] == "user":
+        turns[-1]["content"] = _merge_wire_content(
+            turns[-1]["content"],
+            "Use only the verified tool results above to answer the user's request naturally in plain local language.",
+        )
+
+    out: list[dict[str, Any]] = []
+    if system_parts:
+        out.append({"role": "system", "content": "\n\n".join(system_parts)})
+    out.extend(turns)
+    return out
+
+
 class LlamaCppProvider(BaseLLMProvider):
     """Local GGUF model execution engine powered by llama.cpp.
     
@@ -1678,14 +1758,47 @@ class LlamaCppProvider(BaseLLMProvider):
                     }
                     if tools:
                         payload["tools"] = tools
+                    has_tool_context = bool(tools) or any(
+                        m.get("role") == "tool" or bool(m.get("tool_calls"))
+                        for m in formatted_messages
+                    )
+                    retry_payload: Optional[dict[str, Any]] = None
                     async with httpx.AsyncClient(timeout=120.0) as client:
                         async with client.stream("POST", f"{settings.LLAMA_SERVER_URL}/chat/completions", json=payload) as response:
-                            async for token in _server_stream_tokens(
-                                response,
-                                on_finish=_record_finish,
-                                on_tool_calls=_record_tool_calls,
+                            if (
+                                not response.is_success
+                                and getattr(response, "status_code", None) == 400
+                                and has_tool_context
                             ):
-                                yield token
+                                try:
+                                    err_body = (await response.aread()).decode("utf-8", errors="replace")[:400]
+                                except Exception:
+                                    err_body = ""
+                                logger.warning(
+                                    f"llama-server returned HTTP 400 with tool payload ({err_body}); "
+                                    "retrying once with strict alternating-role messages."
+                                )
+                                retry_payload = dict(payload)
+                                retry_payload.pop("tools", None)
+                                retry_payload["messages"] = _flatten_tool_messages_for_strict_template(
+                                    formatted_messages
+                                )
+                            else:
+                                async for token in _server_stream_tokens(
+                                    response,
+                                    on_finish=_record_finish,
+                                    on_tool_calls=_record_tool_calls,
+                                ):
+                                    yield token
+                                return
+                        if retry_payload is not None:
+                            async with client.stream("POST", f"{settings.LLAMA_SERVER_URL}/chat/completions", json=retry_payload) as retry_resp:
+                                async for token in _server_stream_tokens(
+                                    retry_resp,
+                                    on_finish=_record_finish,
+                                    on_tool_calls=_record_tool_calls,
+                                ):
+                                    yield token
                     return
 
                 # Route B: In-process llama_cpp streaming
