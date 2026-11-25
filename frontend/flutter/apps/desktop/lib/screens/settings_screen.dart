@@ -184,6 +184,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  ValueListenable<bool>? _resolveWindowFocusedListenable() {
+    try {
+      return widget.coordinator?.isWindowFocusedListenable;
+    } on UnimplementedError {
+      return null;
+    }
+  }
+
   Widget _buildSectionStack(SettingsSectionId selectedSection) {
     final activeIndex = kSettingsSections.indexWhere(
       (meta) => meta.id == selectedSection,
@@ -193,12 +201,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
       index: activeIndex < 0 ? 0 : activeIndex,
       sizing: StackFit.expand,
       children: kSettingsSections
-          .map((meta) => _buildSectionPane(meta))
+          .map((meta) => _buildSectionPane(meta, selectedSection))
           .toList(growable: false),
     );
   }
 
-  Widget _buildSectionPane(SettingsSectionMeta meta) {
+  Widget _buildSectionPane(
+    SettingsSectionMeta meta,
+    SettingsSectionId selectedSection,
+  ) {
     final Widget sectionBody = switch (meta.id) {
       SettingsSectionId.appearance => SettingsAppearanceSection(
           controller: widget.controller,
@@ -246,6 +257,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           shellAdapter: widget.shellAdapter,
           externalStatus: widget.resourceStatusListenable,
           onResourcePolicyChanged: widget.onResourcePolicyChanged,
+          isActiveTab: selectedSection == SettingsSectionId.health,
+          windowFocusedListenable: _resolveWindowFocusedListenable(),
         ),
       SettingsSectionId.network =>
         SettingsPlannedSection(section: meta),

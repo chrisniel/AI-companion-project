@@ -1298,3 +1298,105 @@ async def test_d9_untrusted_web_injection_blocks_reminder_task_despite_substring
         assert saved_task == []
     finally:
         _reset_provider_for_tests()
+
+
+@pytest.mark.anyio
+async def test_gemma_style_schedule_query_triggers_prearmed_list_fallback_and_excludes_fired(
+    test_session: AsyncSession,
+    profile_id: str,
+    profile_session,
+    monkeypatch,
+):
+    """Natural schedule queries run deterministic Risk 0 list fallbacks if a model emits no tool_calls."""
+    from datetime import datetime, timezone
+    from app.models.reminder import Reminder
+    from app.models.task import Task
+
+    _reset_provider_for_tests()
+    try:
+        profile = await test_session.get(Profile, profile_id)
+        assert profile is not None
+        profile.quiet_hours_timezone = "Asia/Manila"
+        test_session.add_all(
+            [
+                Reminder(
+                    profile_id=profile_id,
+                    title="Wedding",
+                    scheduled_at=datetime(2026, 12, 8, 12, 0, tzinfo=timezone.utc),
+                    timezone="Asia/Manila",
+                    status="scheduled",
+                ),
+                Reminder(
+                    profile_id=profile_id,
+                    title="Fired Past Event",
+                    scheduled_at=datetime(2026, 10, 1, 8, 0, tzinfo=timezone.utc),
+                    timezone="Asia/Manila",
+                    status="fired",
+                ),
+                Task(
+                    profile_id=profile_id,
+                    title="Prepare Suit",
+                    status="pending",
+                ),
+            ]
+        )
+        await test_session.commit()
+
+        conv, provider = await _setup_conv_and_provider(test_session, profile_id)
+        round_no = 0
+        captured_round1_tool_payloads: list[str] = []
+
+        def _gemma_no_tool_call_stream(messages: list[ChatMessage], **kwargs):
+            nonlocal round_no
+            round_no += 1
+            if round_no == 1:
+                async def _hallucinated_r0():
+                    yield "December 7th: Final App Testing"
+
+                return GenerationStream(_hallucinated_r0(), meta={"finish_reason": "stop", "tool_calls": []})
+
+            for m in messages:
+                if getattr(m, "role", None) == "tool" and isinstance(m.content, str):
+                    captured_round1_tool_payloads.append(m.content)
+
+            async def _truthful_r1():
+                yield "You have your Wedding reminder on December 8 and task Prepare Suit."
+
+            return GenerationStream(_truthful_r1(), meta={"finish_reason": "stop", "tool_calls": []})
+
+        monkeypatch.setattr(provider, "generate_stream", _gemma_no_tool_call_stream)
+
+        query = "Can you tell me what are my schedule for December? Thankss"
+        prep = await prepare_turn(
+            db=test_session,
+            conversation_id=conv.id,
+            profile_session=profile_session,
+            user_text=query,
+        )
+        lock = _get_lock(conv.id)
+        await lock.acquire()
+        frames: list[str] = []
+        async for frame in orchestrate_chat_stream(
+            db=test_session,
+            conversation_id=conv.id,
+            user_text=query,
+            profile_session=profile_session,
+            prepared_turn=prep,
+            conversation_lock=lock,
+        ):
+            frames.append(frame)
+
+        events = _parse_sse_events(frames)
+        token_text = "".join(e.get("content", "") for e in events if e.get("type") == "token")
+        assert "Final App Testing" not in token_text
+        assert "Wedding" in token_text
+
+        result_tools = {e.get("tool_name") for e in events if e.get("type") == "tool_result"}
+        assert {"list_reminders", "list_tasks", "list_alarms"}.issubset(result_tools)
+
+        combined_payload = "\n".join(captured_round1_tool_payloads)
+        assert "Wedding" in combined_payload
+        assert "Prepare Suit" in combined_payload
+        assert "Fired Past Event" not in combined_payload
+    finally:
+        _reset_provider_for_tests()

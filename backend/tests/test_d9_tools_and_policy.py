@@ -418,3 +418,68 @@ async def test_productivity_adapters_localize_timestamps_and_preserve_iso_keys(
     assert list_alarms.executed is True
     assert list_alarms.payload["items"][0]["scheduled_at_local"]
     assert "Standup" in list_alarms.summary
+
+    # Default list_reminders returns scheduled + snoozed items only, omitting old fired/dismissed rows
+    from datetime import datetime, timezone
+    from app.models.reminder import Reminder
+    from app.models.task import Task
+
+    snoozed_rem = Reminder(
+        profile_id=profile_session.profile_id,
+        title="Snoozed flight check-in",
+        scheduled_at=datetime(2026, 12, 9, 6, 0, tzinfo=timezone.utc),
+        timezone="Asia/Manila",
+        status="snoozed",
+    )
+    fired_rem = Reminder(
+        profile_id=profile_session.profile_id,
+        title="Old fired reminder",
+        scheduled_at=datetime(2026, 10, 1, 8, 0, tzinfo=timezone.utc),
+        timezone="Asia/Manila",
+        status="fired",
+    )
+    completed_task = Task(
+        profile_id=profile_session.profile_id,
+        title="Done ancient task",
+        status="completed",
+    )
+    test_session.add_all([snoozed_rem, fired_rem, completed_task])
+    await test_session.commit()
+
+    active_rems = await execute_tool_intent(
+        db=test_session,
+        profile_session=profile_session,
+        conversation_id=conv.id,
+        tool_name="list_reminders",
+        arguments={},
+        provenance="EXPLICIT_USER",
+    )
+    assert active_rems.executed is True
+    rem_titles = {it["title"] for it in active_rems.payload["items"]}
+    assert "Take vitamins" in rem_titles
+    assert "Snoozed flight check-in" in rem_titles
+    assert "Old fired reminder" not in rem_titles
+
+    explicit_fired = await execute_tool_intent(
+        db=test_session,
+        profile_session=profile_session,
+        conversation_id=conv.id,
+        tool_name="list_reminders",
+        arguments={"status": "fired"},
+        provenance="EXPLICIT_USER",
+    )
+    assert explicit_fired.executed is True
+    assert {it["title"] for it in explicit_fired.payload["items"]} == {"Old fired reminder"}
+
+    active_tasks = await execute_tool_intent(
+        db=test_session,
+        profile_session=profile_session,
+        conversation_id=conv.id,
+        tool_name="list_tasks",
+        arguments={},
+        provenance="EXPLICIT_USER",
+    )
+    assert active_tasks.executed is True
+    task_titles = {it["title"] for it in active_tasks.payload["items"]}
+    assert "Buy ring" in task_titles
+    assert "Done ancient task" not in task_titles

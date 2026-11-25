@@ -30,7 +30,7 @@ _EMOJI_RE = re.compile(
     r"[\U00010000-\U0010FFFF\u2600-\u27BF\u2300-\u23FF\u2B00-\u2BFF]+",
     flags=re.UNICODE,
 )
-_ACRONYM_RE = re.compile(r"\b(CPU|GPU|API|RAM|UI|TTS|STT|LLM|JSON|SQL|PC|SDK|WS)\b")
+_ACRONYM_RE = re.compile(r"\b(CPU|GPU|API|RAM|UI|TTS|STT|LLM|JSON|SQL|PC|SDK|WS|ISO)\b")
 
 _TAGALOG_LEXICON_IPA: dict[str, str] = {
     "ako": "ɑkˈɔ",
@@ -324,6 +324,28 @@ def preprocess_text_for_tts(text: str) -> str:
         cleaned,
     )
 
+    def _format_clock_time_ampm(m: re.Match[str]) -> str:
+        hour = int(m.group(1))
+        mins_str = m.group(2)
+        ampm = m.group(3).upper()
+        if mins_str == "00":
+            return f"{hour} {ampm}"
+        mins = int(mins_str)
+        if mins_str.startswith("0"):
+            return f"{hour} oh {mins} {ampm}"
+        return f"{hour} {mins} {ampm}"
+
+    cleaned = re.sub(
+        r"(?i)\b(1[0-2]|0?[1-9]):([0-5]\d)\s*(AM|PM)\b",
+        _format_clock_time_ampm,
+        cleaned,
+    )
+    cleaned = re.sub(
+        r"(?i)\b(at|by|around|until|from|to)\s+(1[0-2]|0?[1-9]):00\b(?!\s*(?:AM|PM)\b)",
+        lambda m: f"{m.group(1)} {int(m.group(2))} o'clock",
+        cleaned,
+    )
+
     def _unit_name(unit: str) -> str:
         return "degrees Celsius" if unit.lower() == "c" else "degrees Fahrenheit"
 
@@ -432,7 +454,7 @@ class _LazyEspeakPhonemizer:
                 else:
                     lib.espeak_SetVoiceByName(b"en-us")
                     self._active_voice = b"en-us"
-            clause_matches = list(re.finditer(r"([^.,!?;:—]*)([.,!?;:—]*)", text))
+            clause_matches = list(re.finditer(r"((?:[^.,!?;—:]|:(?=\d))*)((?:[.,!?;—]|:(?!\d))*)", text))
             clause_phonemes: list[str] = []
             for m in clause_matches:
                 body = (m.group(1) or "").strip()
@@ -502,7 +524,7 @@ def text_to_kokoro_ipa(text: str, *, language: str = "en-us") -> str:
     cleaned = preprocess_text_for_tts(text)
     if not cleaned:
         return ""
-    tokens = re.findall(r"[A-Za-z0-9']+|[.,!?;:()—\-]+|[^\w\s]+|\s+", cleaned)
+    tokens = re.findall(r"[A-Za-z0-9']+(?::\d+)*|[.,!?;:()—\-]+|[^\w\s]+|\s+", cleaned)
     rendered: list[str] = []
     english_buf: list[str] = []
 

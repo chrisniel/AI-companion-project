@@ -251,6 +251,7 @@ class _DesktopShellState extends State<DesktopShell> {
       try {
         widget.coordinator!.onResourceModeSelected =
             _handleTrayResourceModeSelected;
+        widget.coordinator!.onTrayMenuOpening = _refreshResourcePolicyForTray;
       } on UnimplementedError {
         // Minimal Fake coordinators in widget tests may omit optional callbacks.
       }
@@ -722,6 +723,10 @@ class _DesktopShellState extends State<DesktopShell> {
       if (widget.coordinator?.onResourceModeSelected ==
           _handleTrayResourceModeSelected) {
         widget.coordinator?.onResourceModeSelected = null;
+      }
+      if (widget.coordinator?.onTrayMenuOpening ==
+          _refreshResourcePolicyForTray) {
+        widget.coordinator?.onTrayMenuOpening = null;
       }
     } on UnimplementedError {
       // Ignore minimal fakes.

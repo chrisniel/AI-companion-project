@@ -50,11 +50,17 @@ def test_host_config_resource_policy_validation_and_thread_safety(tmp_path, monk
     save_model_selection("qwen3-8b")
     save_hardware_profile("maximum")
 
-    # Rejects paths, non-exe, forbidden system/runtime executables, and >64 items
+    # Rejects paths, invalid Windows filename chars, non-exe, forbidden system/runtime executables, and >64 items
     with pytest.raises(ValueError):
         normalize_game_process_list([r"C:\Games\game.exe"])
     with pytest.raises(ValueError):
         normalize_game_process_list(["not_an_exe.txt"])
+    with pytest.raises(ValueError):
+        normalize_game_process_list(["bad*name.exe"])
+    with pytest.raises(ValueError):
+        normalize_game_process_list(["bad?.exe"])
+    with pytest.raises(ValueError):
+        normalize_game_process_list(["..exe"])
     with pytest.raises(ValueError):
         normalize_game_process_list(["svchost.exe"])
     with pytest.raises(ValueError):
@@ -62,9 +68,24 @@ def test_host_config_resource_policy_validation_and_thread_safety(tmp_path, monk
     with pytest.raises(ValueError):
         normalize_game_process_list([f"game_{i}.exe" for i in range(65)])
 
-    # Deduplicates case-insensitively and preserves order
-    normalized = normalize_game_process_list(["Cyberpunk2077.exe", "cyberpunk2077.exe", "Valorant.exe"])
-    assert normalized == ["cyberpunk2077.exe", "valorant.exe"]
+    # Accepts valid Windows symbols (+, (), [], &) and deduplicates case-insensitively
+    normalized = normalize_game_process_list([
+        "Cyberpunk2077.exe",
+        "cyberpunk2077.exe",
+        "Valorant.exe",
+        "Notepad++.exe",
+        "Game (x64).exe",
+        "Subnautica [DX11].exe",
+        "A&B!@#.exe",
+    ])
+    assert normalized == [
+        "cyberpunk2077.exe",
+        "valorant.exe",
+        "notepad++.exe",
+        "game (x64).exe",
+        "subnautica [dx11].exe",
+        "a&b!@#.exe",
+    ]
 
     saved = save_resource_policy_config(
         resource_mode="auto",

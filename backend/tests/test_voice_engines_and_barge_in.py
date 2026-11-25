@@ -362,7 +362,15 @@ def test_tts_espeak_g2p_taglish_and_preprocessing():
     iso_dt = preprocess_text_for_tts("Scheduled **Wedding prep**—starting 2026-12-08T14:30:00+08:00.")
     assert "**" not in iso_dt
     assert "2026-12-08" not in iso_dt
-    assert "December 8, 2026 at 2:30 PM" in iso_dt
+    assert "December 8, 2026 at 2 30 PM" in iso_dt
+
+    # Natural clock-time normalization & no colon split on numeric times
+    assert preprocess_text_for_tts("Reminder at 2:00 PM and 2:00PM.") == "Reminder at 2 PM and 2 PM."
+    assert preprocess_text_for_tts("ISO-8601 Timestamp: 2026-12-08T07:00:00+08:00") == "I S O-8601 Timestamp: December 8, 2026 at 7 AM"
+    assert preprocess_text_for_tts("Check 9:05 PM, 9:18 PM, and meeting at 2:00.") == "Check 9 oh 5 PM, 9 18 PM, and meeting at 2 o'clock."
+    clock_ipa = text_to_kokoro_ipa("Reminder at 2:00 PM.")
+    assert "zˈɪəɹoʊ" not in clock_ipa
+    assert "zˈiːɹoʊ" not in clock_ipa
 
     em_dash = preprocess_text_for_tts("But wait—your friend’s wedding is on December 8th—really!")
     assert "—" not in em_dash

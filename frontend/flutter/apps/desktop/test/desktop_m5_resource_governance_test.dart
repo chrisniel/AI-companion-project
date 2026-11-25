@@ -332,5 +332,113 @@ void main() {
       expect(find.byType(SettingsPerformanceSection), findsOneWidget);
       expect(find.textContaining('Low-Impact'), findsWidgets);
     });
+
+    testWidgets('focus-aware live polling polls only when active & focused and preserves cooldown focus input', (tester) async {
+      setupViewport(tester);
+      final fakeClient = _FakeResourceGovernanceClient();
+      final focusNotifier = ValueNotifier<bool>(true);
+      bool isActiveTab = true;
+
+      await tester.pumpWidget(
+        StatefulBuilder(
+          builder: (context, setState) {
+            return MaterialApp(
+              theme: CompanionTheme.dark(),
+              home: Scaffold(
+                body: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      SettingsPerformanceSection(
+                        client: fakeClient,
+                        isActiveTab: isActiveTab,
+                        windowFocusedListenable: focusNotifier,
+                        enableLivePolling: true,
+                        activationDebounce: const Duration(milliseconds: 50),
+                        pollInterval: const Duration(milliseconds: 80),
+                        activeTransitionPollInterval:
+                            const Duration(milliseconds: 60),
+                      ),
+                      TextButton(
+                        key: const Key('toggle_tab_test_btn'),
+                        onPressed: () =>
+                            setState(() => isActiveTab = !isActiveTab),
+                        child: const Text('Toggle Tab'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      );
+      await tester.pump();
+      final initialCalls = fakeClient.getResourceCalls;
+
+      // Debounce + first live poll fires
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 100));
+      final callsWhileFocused = fakeClient.getResourceCalls;
+      expect(callsWhileFocused, greaterThan(initialCalls));
+
+      // Focus cooldown field and type without being overwritten by incoming polls
+      await tester.ensureVisible(find.byKey(const Key('resource_cooldown_input')));
+      await tester.tap(find.byKey(const Key('resource_cooldown_input')));
+      await tester.enterText(find.byKey(const Key('resource_cooldown_input')), '120');
+      await tester.pump(const Duration(milliseconds: 100));
+      final cooldownField = tester.widget<TextField>(
+        find.byKey(const Key('resource_cooldown_input')),
+      );
+      expect(cooldownField.controller?.text, equals('120'));
+
+      // Unfocus window -> polling stops cleanly
+      focusNotifier.value = false;
+      await tester.pump();
+      final callsAtBlur = fakeClient.getResourceCalls;
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(fakeClient.getResourceCalls, equals(callsAtBlur));
+
+      // Refocus window -> debounce resumes polling; switching off tab stops it again
+      focusNotifier.value = true;
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(fakeClient.getResourceCalls, greaterThan(callsAtBlur));
+
+      await tester.ensureVisible(find.byKey(const Key('toggle_tab_test_btn')));
+      await tester.tap(find.byKey(const Key('toggle_tab_test_btn')));
+      await tester.pump();
+      final callsOffTab = fakeClient.getResourceCalls;
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(fakeClient.getResourceCalls, equals(callsOffTab));
+    });
+
+    test('DesktopLifecycleCoordinator tracks focus/minimize/restore state and invokes onTrayMenuOpening', () async {
+      final winAdapter = FakeDesktopWindowAdapter();
+      final trayAdapter = FakeDesktopTrayAdapter();
+      final coord = DesktopLifecycleCoordinator(
+        windowAdapter: winAdapter,
+        trayAdapter: trayAdapter,
+      );
+      await coord.initialize();
+      expect(coord.isWindowFocused, isTrue);
+
+      coord.onWindowBlur();
+      expect(coord.isWindowFocused, isFalse);
+      coord.onWindowFocus();
+      expect(coord.isWindowFocused, isTrue);
+      coord.onWindowMinimize();
+      expect(coord.isWindowFocused, isFalse);
+      coord.onWindowRestore();
+      expect(coord.isWindowFocused, isTrue);
+
+      int refreshCalls = 0;
+      coord.onTrayMenuOpening = () async {
+        refreshCalls++;
+      };
+      coord.onTrayIconRightMouseDown();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(refreshCalls, equals(1));
+      await coord.dispose();
+    });
   });
 }

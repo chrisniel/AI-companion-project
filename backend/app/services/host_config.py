@@ -240,7 +240,7 @@ FORBIDDEN_GAME_PROCESS_NAMES = frozenset({
     "llama-server.exe",
     "whisper-server.exe",
 })
-_EXE_BASENAME_RE = re.compile(r"^[a-z0-9._ -]+\.exe$", re.IGNORECASE)
+_INVALID_EXE_CHARS_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
 
 def normalize_game_process_list(entries: Optional[Iterable[str]]) -> list[str]:
@@ -257,7 +257,13 @@ def normalize_game_process_list(entries: Optional[Iterable[str]]) -> list[str]:
             raise ValueError("Game process entries cannot be empty.")
         if "/" in cleaned or "\\" in cleaned or ":" in cleaned or ".." in cleaned:
             raise ValueError(f"Game process entry '{raw}' must be an .exe basename without directory paths.")
-        if not _EXE_BASENAME_RE.match(cleaned) or not cleaned.endswith(".exe") or cleaned == ".exe":
+        if (
+            len(cleaned) > 255
+            or not cleaned.endswith(".exe")
+            or cleaned == ".exe"
+            or _INVALID_EXE_CHARS_RE.search(cleaned)
+            or cleaned[:-4].endswith((".", " "))
+        ):
             raise ValueError(f"Game process entry '{raw}' must end with '.exe' and use valid filename characters.")
         if cleaned in FORBIDDEN_GAME_PROCESS_NAMES:
             raise ValueError(f"Process '{cleaned}' is protected and cannot be added to Auto Gaming watchlist.")

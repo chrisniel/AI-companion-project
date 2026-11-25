@@ -43,7 +43,9 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
   Future<void> Function()? onKillSwitchTriggered;
   Future<void> Function()? onMuteToggleTriggered;
   Future<void> Function(String mode)? onResourceModeSelected;
+  Future<void> Function()? onTrayMenuOpening;
   VoidCallback? onWindowRestored;
+  final ValueNotifier<bool> _windowFocusedNotifier = ValueNotifier<bool>(true);
   bool _globalKillSwitchActive = false;
   bool _audioMuted = false;
   String _resourceRequestedMode = 'normal';
@@ -60,6 +62,8 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
   bool get isWindowVisible => _isWindowVisible;
   bool get isTrayAvailable => _isTrayAvailable;
   bool get isDisposed => _isDisposed;
+  bool get isWindowFocused => _windowFocusedNotifier.value;
+  ValueListenable<bool> get isWindowFocusedListenable => _windowFocusedNotifier;
 
   /// Initializes window constraints, close interception, and system tray.
   Future<void> initialize({
@@ -107,6 +111,7 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
       if (_isTrayAvailable) {
         await windowAdapter.hide();
         _isWindowVisible = false;
+        _windowFocusedNotifier.value = false;
       } else {
         await restoreAndFocusWindow();
       }
@@ -354,6 +359,7 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
       await windowAdapter.show();
       await windowAdapter.focus();
       _isWindowVisible = true;
+      _windowFocusedNotifier.value = true;
       if (_pendingMaximizeOnFirstShow && !_isDisposed) {
         _pendingMaximizeOnFirstShow = false;
         await windowAdapter.maximize();
@@ -377,6 +383,7 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
     }
     await windowAdapter.hide();
     _isWindowVisible = false;
+    _windowFocusedNotifier.value = false;
     return true;
   }
 
@@ -386,6 +393,7 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
   Future<void> handleExitRequested() async {
     if (_isDisposed) return;
     _isDisposed = true;
+    _windowFocusedNotifier.dispose();
 
     // 1. Unsubscribe event listeners to prevent event re-entry
     windowAdapter.removeListener(this);
@@ -424,12 +432,37 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
   Future<void> dispose() async {
     if (_isDisposed) return;
     _isDisposed = true;
+    _windowFocusedNotifier.dispose();
 
     windowAdapter.removeListener(this);
     trayAdapter.removeListener(this);
   }
 
   // --- WindowListener Overrides ---
+
+  @override
+  void onWindowFocus() {
+    if (_isDisposed) return;
+    _windowFocusedNotifier.value = true;
+  }
+
+  @override
+  void onWindowBlur() {
+    if (_isDisposed) return;
+    _windowFocusedNotifier.value = false;
+  }
+
+  @override
+  void onWindowMinimize() {
+    if (_isDisposed) return;
+    _windowFocusedNotifier.value = false;
+  }
+
+  @override
+  void onWindowRestore() {
+    if (_isDisposed) return;
+    _windowFocusedNotifier.value = true;
+  }
 
   @override
   void onWindowClose() {
@@ -454,7 +487,20 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
   @override
   void onTrayIconRightMouseDown() {
     if (_isDisposed || !_isTrayAvailable) return;
-    unawaited(trayAdapter.popUpContextMenu());
+    unawaited(_openTrayMenuWithRefresh());
+  }
+
+  Future<void> _openTrayMenuWithRefresh() async {
+    final hook = onTrayMenuOpening;
+    if (hook != null) {
+      try {
+        await hook().timeout(const Duration(milliseconds: 200));
+      } catch (_) {
+        // Keep tray menu responsive even if backend status refresh times out.
+      }
+    }
+    if (_isDisposed || !_isTrayAvailable) return;
+    await trayAdapter.popUpContextMenu();
   }
 
   @override

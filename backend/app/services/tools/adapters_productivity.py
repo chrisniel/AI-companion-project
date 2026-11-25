@@ -79,7 +79,9 @@ async def run_list_tasks(
     stmt = select(Task).where(Task.profile_id == profile_id, Task.is_deleted.is_(False))
     if args.get("status"):
         stmt = stmt.where(Task.status == args["status"])
-    stmt = stmt.order_by(Task.created_at.desc()).limit(int(args.get("limit", 20)))
+    else:
+        stmt = stmt.where(Task.status.in_(("pending", "in_progress")))
+    stmt = stmt.order_by(Task.created_at.desc()).limit(int(args.get("limit", 50)))
     rows = (await db.execute(stmt)).scalars().all()
     items = []
     for r in rows:
@@ -97,7 +99,7 @@ async def run_list_tasks(
     if items:
         preview = "; ".join(
             f'"{it["title"]}" (due {it["due_at_local"]})' if it["due_at_local"] else f'"{it["title"]}"'
-            for it in items[:5]
+            for it in items[:15]
         )
         summary = f"Listed {len(items)} active task(s): {preview}."
     else:
@@ -115,7 +117,9 @@ async def run_list_reminders(
     stmt = select(Reminder).where(Reminder.profile_id == profile_id, Reminder.is_deleted.is_(False))
     if args.get("status"):
         stmt = stmt.where(Reminder.status == args["status"])
-    stmt = stmt.order_by(Reminder.scheduled_at.asc()).limit(int(args.get("limit", 20)))
+    else:
+        stmt = stmt.where(Reminder.status.in_(("scheduled", "snoozed")))
+    stmt = stmt.order_by(Reminder.scheduled_at.asc()).limit(int(args.get("limit", 50)))
     rows = (await db.execute(stmt)).scalars().all()
     items = []
     for r in rows:
@@ -134,7 +138,7 @@ async def run_list_reminders(
     if items:
         preview = "; ".join(
             f'"{it["title"]}" ({it["scheduled_at_local"]})' if it["scheduled_at_local"] else f'"{it["title"]}"'
-            for it in items[:5]
+            for it in items[:15]
         )
         summary = f"Listed {len(items)} reminder(s): {preview}."
     else:
@@ -152,7 +156,7 @@ async def run_list_alarms(
     stmt = select(Alarm).where(Alarm.profile_id == profile_id, Alarm.is_deleted.is_(False))
     if args.get("enabled_only"):
         stmt = stmt.where(Alarm.enabled.is_(True))
-    stmt = stmt.order_by(Alarm.scheduled_at.asc()).limit(int(args.get("limit", 20)))
+    stmt = stmt.order_by(Alarm.scheduled_at.asc()).limit(int(args.get("limit", 50)))
     rows = (await db.execute(stmt)).scalars().all()
     items = []
     for r in rows:
@@ -172,7 +176,7 @@ async def run_list_alarms(
     if items:
         preview = "; ".join(
             f'"{it["label"]}" ({it["scheduled_at_local"] or it["time_of_day"]})'
-            for it in items[:5]
+            for it in items[:15]
         )
         summary = f"Listed {len(items)} alarm(s): {preview}."
     else:

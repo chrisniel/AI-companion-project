@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:companion_api/companion_api.dart';
@@ -20,6 +21,12 @@ class SettingsPerformanceSection extends StatefulWidget {
     this.shellAdapter,
     this.externalStatus,
     this.onResourcePolicyChanged,
+    this.isActiveTab = true,
+    this.windowFocusedListenable,
+    this.enableLivePolling,
+    this.pollInterval = const Duration(milliseconds: 1500),
+    this.activeTransitionPollInterval = const Duration(milliseconds: 1000),
+    this.activationDebounce = const Duration(milliseconds: 200),
   });
 
   final CompanionClient? client;
@@ -28,41 +35,70 @@ class SettingsPerformanceSection extends StatefulWidget {
   final DesktopShellAdapter? shellAdapter;
   final ValueListenable<ResourcePolicyStatusOut?>? externalStatus;
   final ValueChanged<ResourcePolicyStatusOut>? onResourcePolicyChanged;
+  final bool isActiveTab;
+  final ValueListenable<bool>? windowFocusedListenable;
+  final bool? enableLivePolling;
+  final Duration pollInterval;
+  final Duration activeTransitionPollInterval;
+  final Duration activationDebounce;
 
   @override
   State<SettingsPerformanceSection> createState() =>
       _SettingsPerformanceSectionState();
 }
 
-class _SettingsPerformanceSectionState
-    extends State<SettingsPerformanceSection> {
+class _SettingsPerformanceSectionState extends State<SettingsPerformanceSection>
+    with WidgetsBindingObserver {
   final TextEditingController _exeInputController = TextEditingController();
   final TextEditingController _cooldownController = TextEditingController();
+  final FocusNode _cooldownFocusNode = FocusNode();
 
   ResourcePolicyStatusOut? _status;
   List<ModelRegistryEntry> _registryModels = const <ModelRegistryEntry>[];
   bool _isLoading = false;
   bool _isSaving = false;
+  bool _isPollingSilently = false;
+  bool _windowFocused = true;
+  bool _appResumed = true;
+  Timer? _activationDebounceTimer;
+  Timer? _nextPollTimer;
   String? _errorMessage;
   String? _statusMessage;
 
   DesktopShellAdapter get _shell =>
       widget.shellAdapter ?? WindowsShellAdapter();
 
+  bool get _livePollingEnabled =>
+      widget.enableLivePolling ??
+      !Platform.environment.containsKey('FLUTTER_TEST');
+
+  bool get _shouldLivePoll =>
+      mounted &&
+      _livePollingEnabled &&
+      widget.isActiveTab &&
+      _windowFocused &&
+      _appResumed &&
+      (widget.client != null ||
+          !Platform.environment.containsKey('FLUTTER_TEST'));
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _status = widget.externalStatus?.value;
     if (_status != null) {
       _cooldownController.text = '${_status!.cooldownSeconds}';
     } else {
       _cooldownController.text = '45';
     }
+    _windowFocused = widget.windowFocusedListenable?.value ?? true;
     widget.externalStatus?.addListener(_handleExternalStatusChanged);
+    widget.windowFocusedListenable?.addListener(_handleWindowFocusChanged);
     if (widget.client != null ||
         !Platform.environment.containsKey('FLUTTER_TEST')) {
       _loadStatusAndRegistry();
     }
+    _syncLivePolling();
   }
 
   @override
@@ -73,17 +109,122 @@ class _SettingsPerformanceSectionState
       widget.externalStatus?.addListener(_handleExternalStatusChanged);
       _handleExternalStatusChanged();
     }
+    if (widget.windowFocusedListenable != oldWidget.windowFocusedListenable) {
+      oldWidget.windowFocusedListenable
+          ?.removeListener(_handleWindowFocusChanged);
+      widget.windowFocusedListenable?.addListener(_handleWindowFocusChanged);
+      _windowFocused = widget.windowFocusedListenable?.value ?? true;
+    }
     if (widget.client != oldWidget.client && widget.client != null) {
       _loadStatusAndRegistry();
+    }
+    if (widget.isActiveTab != oldWidget.isActiveTab ||
+        widget.enableLivePolling != oldWidget.enableLivePolling ||
+        widget.windowFocusedListenable != oldWidget.windowFocusedListenable ||
+        widget.client != oldWidget.client) {
+      _syncLivePolling();
     }
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final nextResumed = state == AppLifecycleState.resumed;
+    if (_appResumed == nextResumed) return;
+    _appResumed = nextResumed;
+    _syncLivePolling();
+  }
+
+  @override
   void dispose() {
+    _cancelPollingTimers();
+    WidgetsBinding.instance.removeObserver(this);
     widget.externalStatus?.removeListener(_handleExternalStatusChanged);
+    widget.windowFocusedListenable?.removeListener(_handleWindowFocusChanged);
     _exeInputController.dispose();
     _cooldownController.dispose();
+    _cooldownFocusNode.dispose();
     super.dispose();
+  }
+
+  void _handleWindowFocusChanged() {
+    final nextFocused = widget.windowFocusedListenable?.value ?? true;
+    if (_windowFocused == nextFocused) return;
+    _windowFocused = nextFocused;
+    _syncLivePolling();
+  }
+
+  void _cancelPollingTimers() {
+    _activationDebounceTimer?.cancel();
+    _activationDebounceTimer = null;
+    _nextPollTimer?.cancel();
+    _nextPollTimer = null;
+  }
+
+  void _syncLivePolling() {
+    if (!_shouldLivePoll) {
+      _cancelPollingTimers();
+      return;
+    }
+    if (_activationDebounceTimer != null ||
+        _nextPollTimer != null ||
+        _isPollingSilently) {
+      return;
+    }
+    _activationDebounceTimer = Timer(widget.activationDebounce, () {
+      _activationDebounceTimer = null;
+      unawaited(_pollStatusSilently());
+    });
+  }
+
+  void _scheduleNextPollTimer() {
+    _nextPollTimer?.cancel();
+    if (!_shouldLivePoll) {
+      _nextPollTimer = null;
+      return;
+    }
+    final status = _status;
+    final activeTransition = status != null &&
+        (status.cooldownRemainingSeconds > 0 ||
+            status.transitionState != 'idle');
+    final delay = activeTransition
+        ? widget.activeTransitionPollInterval
+        : widget.pollInterval;
+    _nextPollTimer = Timer(delay, () {
+      _nextPollTimer = null;
+      unawaited(_pollStatusSilently());
+    });
+  }
+
+  Future<void> _pollStatusSilently() async {
+    if (!_shouldLivePoll) return;
+    if (_isLoading || _isSaving || _isPollingSilently) {
+      _scheduleNextPollTimer();
+      return;
+    }
+    _isPollingSilently = true;
+    CompanionClient? client;
+    try {
+      client = await _resolveClient();
+      final status = await client.getResourcePolicy();
+      if (!mounted) return;
+      setState(() {
+        _status = status;
+        if (!_cooldownFocusNode.hasFocus) {
+          _cooldownController.text = '${status.cooldownSeconds}';
+        }
+      });
+      widget.onResourcePolicyChanged?.call(status);
+    } catch (_) {
+      // Silent background poll preserves prior telemetry without flashing transient errors.
+    } finally {
+      if (widget.client == null) {
+        client?.close();
+      }
+      _isPollingSilently = false;
+      if (_shouldLivePoll) {
+        _scheduleNextPollTimer();
+      }
+    }
   }
 
   void _handleExternalStatusChanged() {
@@ -91,7 +232,9 @@ class _SettingsPerformanceSectionState
     if (!mounted || incoming == null) return;
     setState(() {
       _status = incoming;
-      _cooldownController.text = '${incoming.cooldownSeconds}';
+      if (!_cooldownFocusNode.hasFocus) {
+        _cooldownController.text = '${incoming.cooldownSeconds}';
+      }
     });
   }
 
@@ -129,7 +272,9 @@ class _SettingsPerformanceSectionState
       setState(() {
         _status = status;
         _registryModels = models;
-        _cooldownController.text = '${status.cooldownSeconds}';
+        if (!_cooldownFocusNode.hasFocus) {
+          _cooldownController.text = '${status.cooldownSeconds}';
+        }
         _isLoading = false;
       });
       widget.onResourcePolicyChanged?.call(status);
@@ -268,6 +413,27 @@ class _SettingsPerformanceSectionState
       default:
         return profile;
     }
+  }
+
+  String _formatTransitionStatus(ResourcePolicyStatusOut status) {
+    if (status.transitionState == 'deferred_active_turn') {
+      return 'Waiting for active reply before switching...';
+    }
+    if (status.transitionState == 'deferred_model_load') {
+      return 'Waiting for model load before switching...';
+    }
+    if (status.transitionState == 'switching') {
+      return 'Applying policy...';
+    }
+    if (status.lowImpactStrategy == 'lightweight_model' &&
+        status.degradationReason == null &&
+        (status.lowImpactModelId ?? '').isNotEmpty) {
+      return 'Active: Lightweight Model (${status.lowImpactModelId})';
+    }
+    if (status.lowImpactStrategy == 'unload_when_idle') {
+      return 'Active: Unload When Idle (60s)';
+    }
+    return 'Active: CPU Eco (0 GPU Layers)';
   }
 
   @override
@@ -453,6 +619,15 @@ class _SettingsPerformanceSectionState
                       _TelemetryRow(
                         label: 'Detected Watched Games',
                         value: status.detectedActiveGames.join(', '),
+                        ext: ext,
+                      ),
+                    ],
+                    if (status.transitionState != 'idle' ||
+                        status.lowImpactActive) ...[
+                      const SizedBox(height: 6),
+                      _TelemetryRow(
+                        label: 'Transition / Override Status',
+                        value: _formatTransitionStatus(status),
                         ext: ext,
                       ),
                     ],
@@ -724,6 +899,7 @@ class _SettingsPerformanceSectionState
                     child: TextField(
                       key: const Key('resource_cooldown_input'),
                       controller: _cooldownController,
+                      focusNode: _cooldownFocusNode,
                       keyboardType: TextInputType.number,
                       decoration: const InputDecoration(
                         labelText: 'Cooldown (5-300s)',

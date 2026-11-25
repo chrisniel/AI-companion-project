@@ -50,7 +50,7 @@
 
 - **`DEBT-V1-07`: Low-Impact Option B Game List Storage Format [RESOLVED IN M5 BATCH A]**
   - *Context:* Low-Impact mode auto-activates when a configured game or heavy app exits/launches cleanly without thrashing.
-  - *Resolution:* Delivered in M5 Batch A (`feature/m5-resource-governance-a`) under `"resource_policy"` inside machine-global `host_config.json` (`host_config.py` with `threading.RLock` + atomic temp write), storing normalized lowercase `.exe` basenames, `resource_mode` (`normal` / `low_impact` / `auto`), `low_impact_strategy` (`cpu_eco` / `unload_when_idle` / `lightweight_model`), `low_impact_model_id`, and `cooldown_seconds` (`5`–`300`, default `30s`), paired with standard-user Win32 `CreateToolhelp32Snapshot` process polling (`RESOURCE_POLL_INTERVAL_SECONDS = 5.0`).
+  - *Resolution:* Delivered in M5 Batch A (`feature/m5-resource-governance-a`) under `"resource_policy"` inside machine-global `host_config.json` (`host_config.py` with `threading.RLock` + atomic temp write), storing normalized lowercase `.exe` basenames, `resource_mode` (`normal` / `low_impact` / `auto`), `low_impact_strategy` (`cpu_eco` / `unload_when_idle` / `lightweight_model`), `low_impact_model_id`, and `cooldown_seconds` (`5`–`300`, default `45s`), paired with standard-user Win32 `CreateToolhelp32Snapshot` process polling (`RESOURCE_POLL_INTERVAL_SECONDS = 5.0`).
 
 - **`DEBT-V1-08`: Temporary Memory Expiration Sweep Frequency [RESOLVED IN M3 BATCH G1]**
   - *Context:* Temporary memories have `valid_from` and `expires_at` metadata.

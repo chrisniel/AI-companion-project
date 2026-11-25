@@ -20,6 +20,6 @@
 - [x] Phase 2 Slice A3: Host Resource Governance & Gaming Mode Engine (`PC-RESOURCE-001`..`004`, `DEBT-V1-07`, `GET`/`PUT /api/v1/system/resources`)
 - [x] Phase 2 Slice A4: OpenAPI 3.1 (`87` paths / `119` routes), `companion_api` DTO parity (`102` schemas / `113` native routes) & parity unittest
 - [x] Phase 2 Slice A5: Desktop `Settings -> Performance & Gaming` UI & synchronized System Tray quick controls
-- [x] Phase 2 Automated Verification (`935` pytest in `441.39s`, `11/11` isolated `unittest`, OpenAPI `87` routes, `102/102` schemas & `113/113` routes, `8/8` parity unittest, `0` Dart analyzer issues, `24` `companion_core`, `117` `companion_api`, `451` Desktop tests in `04:05`, Windows MSVC `/W4 /WX` Debug build in `20.1s`, `git diff --check develop`)
+- [x] Phase 2 Automated Verification (`936` pytest in `407.35s`, `11/11` isolated `unittest` in `8.176s`, OpenAPI `87` routes, `102/102` schemas & `113/113` routes, `8/8` parity unittest in `0.397s`, `0` Dart analyzer issues, `24` `companion_core`, `117` `companion_api`, `453` Desktop tests in `03:39`, Windows MSVC `/W4 /WX` Debug build in `25.6s`, `git diff --check develop`)
 - [x] Phase 3: Canonical doc sync, `CHANGELOG.md`, `walkthrough-m5-resource-governance-a.md`, branch tracker archival, commit, push & Draft PR
 - [ ] Phase 4: Combined Independent Review, manual Windows host QA, hosted CI green, & Human Owner squash merge
