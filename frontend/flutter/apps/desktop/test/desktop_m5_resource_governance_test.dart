@@ -440,5 +440,88 @@ void main() {
       expect(refreshCalls, equals(1));
       await coord.dispose();
     });
+
+    testWidgets(
+      'SettingsPerformanceSection resolves primaryFile lowImpactModelId and renders applying state cleanly',
+      (tester) async {
+        final fakeClient = _FakeResourceGovernanceClient(
+          initialStatus: const ResourcePolicyStatusOut(
+            requestedMode: 'low_impact',
+            effectiveMode: 'low_impact',
+            lowImpactActive: true,
+            lowImpactStrategy: 'lightweight_model',
+            lowImpactModelId: 'qwen3-1.7b-mini.gguf',
+            gameProcessList: <String>['valorant.exe'],
+            detectedActiveGames: <String>[],
+            cooldownSeconds: 45,
+            cooldownRemainingSeconds: 0,
+            transitionState: 'applying',
+            degradationReason: null,
+            deferredBackgroundWork: true,
+            hostGpuName: null,
+            hostVramGb: null,
+            hostRamGb: 32.0,
+            availableRamGb: 18.4,
+            appliedProfile: 'balanced',
+            requestedProfile: 'balanced',
+            telemetrySource: 'windows_global_memory_status',
+          ),
+        );
+
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: CompanionTheme.dark(),
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: SettingsPerformanceSection(client: fakeClient),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+        expect(find.textContaining('Applying policy...'), findsOneWidget);
+        expect(find.textContaining('Qwen3 1.7B Mini'), findsWidgets);
+      },
+    );
+
+    test(
+      'DesktopLifecycleCoordinator.updateResourceMode deduplicates unchanged tray rebuilds',
+      () async {
+        final winAdapter = FakeDesktopWindowAdapter();
+        final trayAdapter = _CountingTrayAdapter();
+        final coord = DesktopLifecycleCoordinator(
+          windowAdapter: winAdapter,
+          trayAdapter: trayAdapter,
+        );
+        await coord.initialize();
+        final initialCalls = trayAdapter.setContextMenuCount;
+
+        await coord.updateResourceMode('auto', true);
+        expect(trayAdapter.setContextMenuCount, equals(initialCalls + 1));
+
+        // Unchanged calls must not churn Win32 setContextMenu
+        await coord.updateResourceMode('auto', true);
+        await coord.updateResourceMode(' AUTO ', true);
+        expect(trayAdapter.setContextMenuCount, equals(initialCalls + 1));
+
+        // Actual state transition triggers one update
+        await coord.updateResourceMode('auto', false);
+        expect(trayAdapter.setContextMenuCount, equals(initialCalls + 2));
+
+        await coord.dispose();
+      },
+    );
   });
+}
+
+class _CountingTrayAdapter extends FakeDesktopTrayAdapter {
+  int setContextMenuCount = 0;
+
+  @override
+  Future<void> setContextMenu(Menu menu) async {
+    setContextMenuCount++;
+    await super.setContextMenu(menu);
+  }
 }

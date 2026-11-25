@@ -166,10 +166,15 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
     bool lowImpactActive,
   ) async {
     final normalized = (requestedMode ?? 'normal').trim().toLowerCase();
-    _resourceRequestedMode =
+    final resolvedMode =
         (normalized == 'low_impact' || normalized == 'auto')
             ? normalized
             : 'normal';
+    if (_resourceRequestedMode == resolvedMode &&
+        _lowImpactActive == lowImpactActive) {
+      return;
+    }
+    _resourceRequestedMode = resolvedMode;
     _lowImpactActive = lowImpactActive;
     await _refreshTrayMenuSafe('tray resource mode menu');
   }
@@ -359,7 +364,9 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
       await windowAdapter.show();
       await windowAdapter.focus();
       _isWindowVisible = true;
-      _windowFocusedNotifier.value = true;
+      if (!_isDisposed) {
+        _windowFocusedNotifier.value = true;
+      }
       if (_pendingMaximizeOnFirstShow && !_isDisposed) {
         _pendingMaximizeOnFirstShow = false;
         await windowAdapter.maximize();
@@ -383,7 +390,9 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
     }
     await windowAdapter.hide();
     _isWindowVisible = false;
-    _windowFocusedNotifier.value = false;
+    if (!_isDisposed) {
+      _windowFocusedNotifier.value = false;
+    }
     return true;
   }
 

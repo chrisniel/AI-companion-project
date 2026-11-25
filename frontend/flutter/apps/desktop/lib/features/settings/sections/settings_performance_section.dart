@@ -229,7 +229,7 @@ class _SettingsPerformanceSectionState extends State<SettingsPerformanceSection>
 
   void _handleExternalStatusChanged() {
     final incoming = widget.externalStatus?.value;
-    if (!mounted || incoming == null) return;
+    if (!mounted || incoming == null || identical(incoming, _status)) return;
     setState(() {
       _status = incoming;
       if (!_cooldownFocusNode.hasFocus) {
@@ -422,7 +422,7 @@ class _SettingsPerformanceSectionState extends State<SettingsPerformanceSection>
     if (status.transitionState == 'deferred_model_load') {
       return 'Waiting for model load before switching...';
     }
-    if (status.transitionState == 'switching') {
+    if (status.transitionState == 'applying') {
       return 'Applying policy...';
     }
     if (status.lowImpactStrategy == 'lightweight_model' &&
@@ -490,11 +490,14 @@ class _SettingsPerformanceSectionState extends State<SettingsPerformanceSection>
     final installedChoices = _registryModels
         .where((m) => m.primaryFileExists)
         .toList(growable: false);
-    final selectedLightweightId = installedChoices.any(
-      (m) => m.id == status.lowImpactModelId || m.primaryFile == status.lowImpactModelId,
-    )
-        ? status.lowImpactModelId
-        : null;
+    String? selectedLightweightId;
+    for (final m in installedChoices) {
+      if (m.id == status.lowImpactModelId ||
+          m.primaryFile == status.lowImpactModelId) {
+        selectedLightweightId = m.id;
+        break;
+      }
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

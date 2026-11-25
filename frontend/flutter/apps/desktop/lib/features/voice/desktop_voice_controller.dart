@@ -476,7 +476,7 @@ class DesktopVoiceController extends ChangeNotifier {
           .replaceFirst(RegExp(r'^\s*(?:[-*•▪▸►]+|\d+[.)])\s+'), '')
           .trim();
       if (line.isEmpty || !RegExp(r'[A-Za-z0-9]').hasMatch(line)) continue;
-      if (!RegExp(r'[.!?;:]\s*$').hasMatch(line)) {
+      if (!RegExp(r'[.!?;:][*_~"\x27)\]]*\s*$').hasMatch(line)) {
         line = '$line.';
       }
       normalizedLines.add(line);

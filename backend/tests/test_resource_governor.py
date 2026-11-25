@@ -293,6 +293,109 @@ async def test_llama_cpp_non_blocking_deferral_and_transitional_zero_ngl_snapsho
 
 
 @pytest.mark.asyncio
+async def test_llama_cpp_mode0_mode1_lightweight_sets_temp_flag_and_strategy_switch_unloads(
+    tmp_path, monkeypatch
+):
+    from app.services.host_config import save_hardware_profile, save_resource_policy_config
+    from app.services.llm.llama_cpp import LlamaCppProvider
+
+    _configure_temp_host_config(tmp_path, monkeypatch)
+    save_hardware_profile("balanced")
+    save_resource_policy_config(
+        resource_mode="low_impact",
+        low_impact_strategy="lightweight_model",
+        low_impact_model_id="tiny-helper.gguf",
+    )
+
+    class _AliveProc:
+        def poll(self):
+            return None
+
+    async def _always_healthy():
+        return True
+
+    async def _always_loaded(_runtime_id: str) -> bool:
+        return True
+
+    from types import SimpleNamespace
+
+    fake_entry = SimpleNamespace(
+        runtime_model_id="tiny-helper",
+        manifest=SimpleNamespace(id="tiny-helper", primary_file="tiny-helper.gguf"),
+        library_state=SimpleNamespace(primary_file_exists=True, root_kind="factory"),
+    )
+    monkeypatch.setattr(
+        "app.services.llm.llama_cpp.find_model_registry_entry",
+        lambda _ident: fake_entry,
+    )
+
+    for mode_label in ("mode0", "mode1"):
+        provider = LlamaCppProvider()
+        monkeypatch.setattr(provider, "_models_dir_for_entry", lambda _e: tmp_path / "models")
+        if mode_label == "mode0":
+            provider._managed_by_core = True
+            provider._server_process = _AliveProc()
+            provider._server_is_active = True
+            provider._active_models_dir = (tmp_path / "models").resolve()
+            provider._applied_profile = "balanced"
+        else:
+            provider._managed_by_core = False
+            monkeypatch.setattr(provider, "_check_port_listening", lambda _h, _p: True)
+
+        monkeypatch.setattr(provider, "_check_external_server", _always_healthy)
+        monkeypatch.setattr(provider, "_router_load_model", _always_loaded)
+        monkeypatch.setattr(provider, "_start_idle_monitor", lambda: None)
+
+        await provider.apply_resource_policy(
+            low_impact_active=True,
+            strategy="lightweight_model",
+            lightweight_model_id="tiny-helper.gguf",
+        )
+        ok = await provider.load_model()
+        assert ok is True
+        assert provider._resource_using_temporary_model is True
+
+        unload_calls = []
+
+        async def _track_unload():
+            unload_calls.append("unloaded")
+            provider._runtime_state = LLMRuntimeState.MODEL_UNLOADED
+            provider._active_model_name = None
+            provider._resource_using_temporary_model = False
+
+        monkeypatch.setattr(provider, "_unload_model_locked", _track_unload)
+        await provider.apply_resource_policy(
+            low_impact_active=False,
+            strategy="lightweight_model",
+        )
+        assert unload_calls == ["unloaded"]
+        assert provider._resource_using_temporary_model is False
+
+    # Switching lightweight_model -> unload_when_idle while already in Low-Impact unloads immediately
+    switch_provider = LlamaCppProvider()
+    switch_provider._resource_low_impact_active = True
+    switch_provider._resource_strategy = "lightweight_model"
+    switch_provider._resource_lightweight_model_id = "tiny-helper.gguf"
+    switch_provider._runtime_state = LLMRuntimeState.MODEL_READY
+    switch_provider._server_is_active = True
+    switch_provider._active_model_name = "tiny-helper.gguf"
+    switch_unloads = []
+
+    async def _track_switch_unload():
+        switch_unloads.append("unloaded")
+        switch_provider._runtime_state = LLMRuntimeState.MODEL_UNLOADED
+        switch_provider._active_model_name = None
+        switch_provider._resource_using_temporary_model = False
+
+    monkeypatch.setattr(switch_provider, "_unload_model_locked", _track_switch_unload)
+    await switch_provider.apply_resource_policy(
+        low_impact_active=True,
+        strategy="unload_when_idle",
+    )
+    assert switch_unloads == ["unloaded"]
+
+
+@pytest.mark.asyncio
 async def test_low_impact_defers_routines_and_non_explicit_extraction_while_preserving_alarms_and_reminders(
     tmp_path, monkeypatch, test_session: AsyncSession, profile_id: str
 ):

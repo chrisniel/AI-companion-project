@@ -294,6 +294,7 @@ def preprocess_text_for_tts(text: str) -> str:
     formatted_lines: list[str] = []
     for raw_line in cleaned.splitlines():
         line = re.sub(r"^\s*(?:[-*•▪▸►]+|\d+[.)])\s+", "", raw_line).strip()
+        line = re.sub(r"[*_~]+", "", line).strip()
         if not line:
             continue
         if re.search(r"[A-Za-z0-9]", line) and not re.search(r"[.!?;:,—–]\s*$", line):

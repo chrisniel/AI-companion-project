@@ -378,11 +378,15 @@ def test_tts_espeak_g2p_taglish_and_preprocessing():
         "- **December 7th:** Task - \"Final App Testing\" – Estimated Duration: 3 hours\n"
         "• **December 8th:** Alarm – \"Morning Routine\" – 7:00 AM\n"
         "- **December 15th:** Reminder – \"UI/UX Review\" - 2:00 PM\n"
+        "- **Note:**\n"
+        "- **Done!**\n"
     )
     assert "3 hours. December 8th:" in bullet_text
     assert "7 AM. December 15th:" in bullet_text
     assert "Task, \"Final App Testing\", Estimated Duration" in bullet_text
     assert "\"U I or UX Review\", 2 PM." in bullet_text
+    assert "Note:." not in bullet_text
+    assert "Done!." not in bullet_text
 
     em_dash = preprocess_text_for_tts("But wait—your friend’s wedding is on December 8th—really!")
     assert "—" not in em_dash

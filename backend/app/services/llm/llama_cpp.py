@@ -433,7 +433,7 @@ class LlamaCppProvider(BaseLLMProvider):
                     or prev_resolved_model != resolved_lightweight
                 )
                 if eff_strategy == "unload_when_idle":
-                    if not was_active and self.is_loaded():
+                    if (not was_active or prev_strategy != strategy) and self.is_loaded():
                         await self._unload_model_locked()
                     elif self.is_loaded() and self._last_active_at is not None:
                         idle_elapsed = (datetime.now(timezone.utc) - self._last_active_at).total_seconds()
@@ -934,6 +934,11 @@ class LlamaCppProvider(BaseLLMProvider):
                                 if await self._router_load_model(target_model_name):
                                     self._runtime_state = LLMRuntimeState.MODEL_READY
                                     self._active_model_name = target_model_name
+                                    self._resource_using_temporary_model = bool(
+                                        self._resource_low_impact_active
+                                        and self._effective_strategy() == "lightweight_model"
+                                        and model_name is None
+                                    )
                                     self._last_active_at = datetime.now(timezone.utc)
                                     self._start_idle_monitor()
                                     return True
@@ -959,6 +964,11 @@ class LlamaCppProvider(BaseLLMProvider):
                             if await self._router_load_model(target_model_name):
                                 self._runtime_state = LLMRuntimeState.MODEL_READY
                                 self._active_model_name = target_model_name
+                                self._resource_using_temporary_model = bool(
+                                    self._resource_low_impact_active
+                                    and self._effective_strategy() == "lightweight_model"
+                                    and model_name is None
+                                )
                                 self._last_active_at = datetime.now(timezone.utc)
                                 self._start_idle_monitor()
                                 return True

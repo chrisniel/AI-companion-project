@@ -6,6 +6,7 @@ import asyncio
 import ctypes
 from ctypes import wintypes
 import logging
+import math
 import sys
 import time
 from typing import Callable, Optional
@@ -190,7 +191,7 @@ class ResourceGovernor:
                     if self._cooldown_started_at is None:
                         self._cooldown_started_at = now_mono
                     elapsed = max(0.0, now_mono - self._cooldown_started_at)
-                    remaining = max(0, int(round(cooldown_secs - elapsed)))
+                    remaining = max(0, int(math.ceil(cooldown_secs - elapsed)))
                     if elapsed < float(cooldown_secs) and remaining > 0:
                         self._cooldown_remaining_seconds = remaining
                         target_low_impact = True
@@ -286,8 +287,9 @@ class ResourceGovernor:
             cooldown_seconds=request.cooldown_seconds,
         )
         if request.resource_mode in ("normal", "low_impact"):
-            self._cooldown_started_at = None
-            self._cooldown_remaining_seconds = 0
+            async with self._get_lock():
+                self._cooldown_started_at = None
+                self._cooldown_remaining_seconds = 0
         await self.evaluate_once()
         return await self.get_status()
 
